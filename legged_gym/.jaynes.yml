@@ -1,0 +1,50 @@
+version: 0
+run:
+  mounts:
+    - !mounts.SSHCode
+      local_path: .
+      local_tar: /tmp/{now:%Y-%m-%d}/{now:%H%M%S.%f}-extreme-parkour.tar
+      host_path: "{secret.Homedir}/extreme-parkour"
+      remote_tar: "{secret.Homedir}/{now:%Y-%m-%d}/{now:%H%M%S.%f}/extreme-parkour.tar"
+      pypath: true
+      # excludes: >-
+      #   --exclude='data' --exclude='samples' --exclude='images' --exclude='videos' --exclude='wandb'
+      #   --exclude='figures' --exclude='results' --exclude='analysis' --exclude='*.ipynb'
+      #   --exclude='*__pycache__' --exclude='*.git' --exclude='*.png' --exclude='*.gif'
+      #   --exclude='*.mp4' --exclude='*.idea' --exclude='*.egg-info' --exclude='*.pkl'
+      #   --exclude='*.log*' --exclude='custom_vendor' --exclude='*.csv'
+      #   --exclude='checkpoints' --exclude='log' --exclude='runs' --exclude='experiment'
+      #   --exclude='*.tmp' --exclude='tmp*' --exclude='tmp'
+      #   --exclude='build' --exclude='go1_camera' --exclude='b1_deployment'
+      #   --exclude='high_level' --exclude='go1_gym_deploy'
+      compress: true
+  runner: !runners.Slurm
+    # these should go into your ~/.bashrc, so that you can remove these
+    envs: >-
+      LC_CTYPE=en_US.UTF-8 LANG=en_US.UTF-8 LANGUAGE=en_US
+    setup: |
+      source /etc/profile.d/modules.sh
+      source $HOME/.bashrc
+      export TMPDIR=/state/partition1/user/$USER;
+      module load cuda/10.2
+      module load anaconda/2022b
+      export LD_LIBRARY_PATH=/state/partition1/llgrid/pkg/anaconda/anaconda3-2022b/lib:$LD_LIBRARY_PATH
+    startup: >-
+      echo "creating partition";
+      mkdir -p /state/partition1/user/$USER;
+      export TMPDIR=/state/partition1/user/$USER;
+      echo "finished";
+      export CUDA_VISIBLE_DEVICES=0;
+    pypath: "{mounts[0].host_path}"
+    work_dir: "{mounts[0].host_path}"
+    # exclude: d-7-11-2,d-10-1-2, d-7-8-1
+    exclude: d-8-7-2 , d-10-16-1 # avoids jaynes.param_codec error
+    # time_limit: "0:0:20"
+    mem: 16000
+    n_cpu: 40
+    n_gpu: volta:1
+  launch: !ENV
+    type: ssh
+    ip: "{secret.HostName}"
+    username: "{secret.User}"
+    pem: "{secret.IdentityFile}"
