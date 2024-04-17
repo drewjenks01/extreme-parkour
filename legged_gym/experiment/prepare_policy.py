@@ -25,12 +25,10 @@ def load_and_save_policy(args):
 
     print(cfg.keys())
 
-
-
     phase = args.phase
     extra_name = args.name
 
-    path = f'/home/andrewjenkins/Documents/extreme-parkour/legged_gym/logs/parkour_new/phase{phase}_{extra_name}'
+    path = f'/home/andrewjenkins/extreme-parkour/legged_gym/logs/parkour_new/phase{phase}_{extra_name}'
     if not os.path.exists(path):
         os.makedirs(path)
 

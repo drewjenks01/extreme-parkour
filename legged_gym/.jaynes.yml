@@ -4,7 +4,7 @@ run:
     - !mounts.SSHCode
       local_path: .
       local_tar: /tmp/{now:%Y-%m-%d}/{now:%H%M%S.%f}-extreme-parkour.tar
-      host_path: "{secret.Homedir}/extreme-parkour"
+      host_path: "{secret.Homedir}/{now:%Y-%m-%d}/{now:%H%M%S.%f}/extreme-parkour"
       remote_tar: "{secret.Homedir}/{now:%Y-%m-%d}/{now:%H%M%S.%f}/extreme-parkour.tar"
       pypath: true
       # excludes: >-
@@ -40,8 +40,8 @@ run:
     # exclude: d-7-11-2,d-10-1-2, d-7-8-1
     exclude: d-8-7-2 , d-10-16-1 # avoids jaynes.param_codec error
     # time_limit: "0:0:20"
-    mem: 16000
-    n_cpu: 40
+    mem: 12000
+    n_cpu: 20
     n_gpu: volta:1
   launch: !ENV
     type: ssh

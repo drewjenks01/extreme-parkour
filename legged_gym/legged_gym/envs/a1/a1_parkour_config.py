@@ -60,8 +60,8 @@ class A1ParkourCfg( LeggedRobotCfg ):
         decimation = 4
 
     class asset( LeggedRobotCfg.asset ):
-        file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/go1_wtw/urdf/go1_v2.urdf'
-        #file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/a1/urdf/a1.urdf'
+        #file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/go1_wtw/urdf/go1_v2.urdf'
+        file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/a1/urdf/a1.urdf'
         foot_name = "foot"
         penalize_contacts_on = ["thigh", "calf", "base"]
         terminate_after_contacts_on = ["base"]#, "thigh", "calf"]

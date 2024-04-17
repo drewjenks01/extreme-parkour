@@ -109,12 +109,6 @@ class LeggedRobot(BaseTask):
         self.total_env_steps_counter = 0
         self.record_now = False
 
-        if self.cfg.depth.use_camera:
-            if self.cfg.depth.use_rgb:
-                self.image_type = gymapi.IMAGE_COLOR
-            else:
-                self.image_type = gymapi.IMAGE_DEPTH
-
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
         self.post_physics_step()
 
@@ -159,8 +153,14 @@ class LeggedRobot(BaseTask):
         self.extras["delta_yaw_ok"] = self.delta_yaw < 0.6
         if self.cfg.depth.use_camera and self.global_counter % self.cfg.depth.update_interval == 0:
             self.extras["depth"] = self.depth_buffer[:, -2]  # have already selected last one
+            if self.cfg.depth.use_rgb:
+                self.extras["rgb"] = self.rgb_buffer[:, -2]
         else:
             self.extras["depth"] = None
+
+            if self.cfg.depth.use_rgb:
+                self.extras["rgb"] = None
+
         return self.obs_buf, self.privileged_obs_buf, self.rew_buf, self.reset_buf, self.extras
 
     def get_history_observations(self):
@@ -176,7 +176,15 @@ class LeggedRobot(BaseTask):
         rgb_image = rgb_image[:-2, 4:-4, :3]
         # switch color channels to be first
         rgb_image = rgb_image.permute(2, 0, 1)
-        rgb_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
+
+        # if self.cfg.domain_rand.randomize_ground_color:
+        #     # randomize color of light grey pixels -- where r==g==b and r>=128
+        #     mask = (rgb_image[0] == rgb_image[1]) & (rgb_image[0] == rgb_image[2]) & (rgb_image[0] >= 128)
+        #     rgb_image = torch.where(mask, torch.randint(0, 256, (3, ), device=self.device), rgb_image[:, mask])
+
+
+        #print(rgb_image.shape, rgb_image)
+        #rgb_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
         #rgb_image = torch.clip(rgb_image, -self.cfg.depth.far_clip, -self.cfg.depth.near_clip)
         rgb_image = self.resize_transform(rgb_image[None, :]).squeeze()
         rgb_image = rgb_image / 255.0
@@ -196,27 +204,50 @@ class LeggedRobot(BaseTask):
         # crop 30 pixels from the left and right and and 20 pixels from bottom and return croped image
         return depth_image[:-2, 4:-4]
 
-    def update_depth_buffer(self):
+    def update_vision_buffers(self):
         if not self.cfg.depth.use_camera:
             return
 
         if self.global_counter % self.cfg.depth.update_interval != 0:
             return
+        
         self.gym.step_graphics(self.sim) # required to render in headless mode
         self.gym.render_all_camera_sensors(self.sim)
         self.gym.start_access_image_tensors(self.sim)
 
+        self.update_depth_buffer()
+
+        if self.cfg.depth.use_rgb:
+            self.update_rgb_buffer()
+
+        self.gym.end_access_image_tensors(self.sim)
+
+    
+    def update_rgb_buffer(self):
+        for i in range(self.num_envs):
+            rgb_image_ = self.gym.get_camera_image_gpu_tensor(self.sim, 
+                                                                self.envs[i], 
+                                                                self.cam_handles[i],
+                                                                gymapi.IMAGE_COLOR)
+            
+            rgb_image = gymtorch.wrap_tensor(rgb_image_)
+            rgb_image = self.process_rgb_image(rgb_image, i)
+
+            init_flag = self.episode_length_buf <= 1
+            if init_flag[i]:
+                self.rgb_buffer[i] = torch.stack([rgb_image] * self.cfg.depth.buffer_len, dim=0)
+            else:
+                self.rgb_buffer[i] = torch.cat([self.rgb_buffer[i, 1:], rgb_image.to(self.device).unsqueeze(0)], dim=0)
+
+    def update_depth_buffer(self):
         for i in range(self.num_envs):
             depth_image_ = self.gym.get_camera_image_gpu_tensor(self.sim, 
                                                                 self.envs[i], 
                                                                 self.cam_handles[i],
-                                                                self.image_type)
+                                                                 gymapi.IMAGE_DEPTH)
             
             depth_image = gymtorch.wrap_tensor(depth_image_)
-            if self.cfg.depth.use_rgb:
-                depth_image = self.process_rgb_image(depth_image, i)
-            else:
-                depth_image = self.process_depth_image(depth_image, i)
+            depth_image = self.process_depth_image(depth_image, i)
 
             init_flag = self.episode_length_buf <= 1
             if init_flag[i]:
@@ -224,7 +255,6 @@ class LeggedRobot(BaseTask):
             else:
                 self.depth_buffer[i] = torch.cat([self.depth_buffer[i, 1:], depth_image.to(self.device).unsqueeze(0)], dim=0)
 
-        self.gym.end_access_image_tensors(self.sim)
 
     def _update_goals(self):
         next_flag = self.reach_goal_timer > self.cfg.env.reach_goal_delay / self.dt
@@ -287,7 +317,8 @@ class LeggedRobot(BaseTask):
         self.cur_goals = self._gather_cur_goals()
         self.next_goals = self._gather_cur_goals(future=1)
 
-        self.update_depth_buffer()
+        #self.update_depth_buffer()
+        self.update_vision_buffers()
 
         self.compute_observations() # in some cases a simulation step might be required to refresh some obs (for example body positions)
 
@@ -302,10 +333,16 @@ class LeggedRobot(BaseTask):
             self._draw_goals()
             self._draw_feet()
             if self.cfg.depth.use_camera:
-                window_name = "Depth Image"
-                cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-                cv2.imshow("Depth Image", self.depth_buffer[self.lookat_id, -1].cpu().numpy() + 0.5)
-                cv2.waitKey(1)
+                if self.cfg.depth.use_rgb:
+                    window_name = "RGB Image"
+                    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+                    cv2.imshow("RGB Image", self.rgb_buffer[self.lookat_id, -1].permute(1,2,0).cpu().numpy())
+                    cv2.waitKey(1)
+                else:
+                    window_name = "Depth Image"
+                    cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
+                    cv2.imshow("Depth Image", self.depth_buffer[self.lookat_id, -1].cpu().numpy() + 0.5)
+                    cv2.waitKey(1)
 
         # self._draw_goals()
         self._render_headless()
@@ -434,7 +471,7 @@ class LeggedRobot(BaseTask):
                             (self.dof_pos - self.default_dof_pos_all) * self.obs_scales.dof_pos,
                             self.dof_vel * self.obs_scales.dof_vel,
                             self.action_history_buf[:, -1],
-                            0*self.contact_filt.float()-0.5,
+                            0*(self.contact_filt.float()-0.5),
                             ),dim=-1)
         priv_explicit = torch.cat((self.base_lin_vel * self.obs_scales.lin_vel,
                                    0 * self.base_lin_vel,
@@ -610,7 +647,7 @@ class LeggedRobot(BaseTask):
         direction = np.random.uniform(-0.5, 0.5, size=3)
         direction[2] = 1.0
         direction = gymapi.Vec3(direction[0], direction[1], direction[2])
-        self.env.gym.set_light_parameters(self.env.sim, 0, intensity, ambient, direction)
+        self.gym.set_light_parameters(self.sim, 0, intensity, ambient, direction)
         
     def _gather_cur_goals(self, future=0):
         return self.env_goals.gather(1, (self.cur_goal_idx[:, None, None]+future).expand(-1, -1, self.env_goals.shape[-1])).squeeze(1)
@@ -844,6 +881,14 @@ class LeggedRobot(BaseTask):
                                             self.cfg.depth.buffer_len, 
                                             self.cfg.depth.resized[1], 
                                             self.cfg.depth.resized[0]).to(self.device)
+            
+            if self.cfg.depth.use_rgb:
+                self.rgb_buffer = torch.zeros(self.num_envs,  
+                                            self.cfg.depth.buffer_len, 
+                                            3,
+                                            self.cfg.depth.resized[1], 
+                                            self.cfg.depth.resized[0]).to(self.device)
+
 
     def _prepare_reward_function(self):
         """ Prepares a list of reward functions, whcih will be called to compute the total reward.
@@ -1033,17 +1078,16 @@ class LeggedRobot(BaseTask):
             rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
             self.gym.set_asset_rigid_shape_properties(robot_asset, rigid_shape_props)
             anymal_handle = self.gym.create_actor(env_handle, robot_asset, start_pose, "anymal", i, self.cfg.asset.self_collisions, 0)
+            if self.cfg.domain_rand.randomize_ground_texture:
+                self.gym.set_rigid_body_texture(env_handle, anymal_handle, 1, gymapi.MeshType.MESH_VISUAL, textures[i%4])
+            # if self.cfg.domain_rand.randomize_ground_color:
+            #     color = list(np.random.uniform(0, 1, size=3))
+            #     self.gym.set_rigid_body_color(env_handle, anymal_handle, -1, gymapi.MESH_VISUAL, gymapi.Vec3(color[0], color[1], color[2]))
             dof_props = self._process_dof_props(dof_props_asset, i)
             self.gym.set_actor_dof_properties(env_handle, anymal_handle, dof_props)
             body_props = self.gym.get_actor_rigid_body_properties(env_handle, anymal_handle)
             body_props, mass_params = self._process_rigid_body_props(body_props, i)
             self.gym.set_actor_rigid_body_properties(env_handle, anymal_handle, body_props, recomputeInertia=True)
-            if self.cfg.domain_rand.randomize_ground_texture:
-                self.gym.set_rigid_body_texture(env_handle, anymal_handle, 0, gymapi.MeshType.MESH_VISUAL, textures[i%4])
-            if self.cfg.domain_rand.randomize_ground_color:
-                color = list(np.random.randint(0, 255, size=3))
-                self.gym.set_rigid_body_color(env_handle, anymal_handle, 0, gymapi.MESH_VISUAL, gymapi.Vec3(color[0], color[1], color[2]))
-
 
             self.envs.append(env_handle)
             self.actor_handles.append(anymal_handle)

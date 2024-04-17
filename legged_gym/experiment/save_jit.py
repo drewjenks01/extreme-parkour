@@ -1,11 +1,12 @@
 import os, sys
 from statistics import mode
 sys.path.append("../../../rsl_rl")
+from modules import depth_backbone
 import torch
 import torch.nn as nn
-from rsl_rl.rsl_rl.modules.actor_critic import Actor, StateHistoryEncoder, get_activation, ActorCriticRMA
-from rsl_rl.rsl_rl.modules.estimator import Estimator
-from rsl_rl.rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RecurrentDepthBackbone
+from rsl_rl.modules.actor_critic import Actor, StateHistoryEncoder, get_activation, ActorCriticRMA
+from rsl_rl.modules.estimator import Estimator
+from rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RecurrentDepthBackbone
 import argparse
 import code
 import shutil
@@ -127,6 +128,9 @@ def play(args):
         policy = HardwareScandotNN(n_proprio, num_scan, n_priv_latent, n_priv_explicit, history_len, num_actions, args.tanh).to(device)
     elif phase == 2:
         policy = HardwareVisionNN(n_proprio, num_scan, n_priv_latent, n_priv_explicit, history_len, num_actions, args.tanh).to(device)
+        vision_backbone  = DepthOnlyFCBackbone58x87(n_proprio, 32, 512)
+        vision_encoder = RecurrentDepthBackbone(vision_backbone, None)
+
     load_path, checkpoint = get_load_path(root=load_run, checkpoint=checkpoint)
     load_run = os.path.dirname(load_path)
     print(f"Loading model from: {load_path}")
@@ -136,6 +140,8 @@ def play(args):
         policy.load_state_dict(ac_state_dict['model_state_dict'], strict=False)
     elif phase == 2:
         policy.actor.load_state_dict(ac_state_dict['depth_actor_state_dict'], strict=True)
+        vision_encoder.load_state_dict(ac_state_dict['depth_encoder_state_dict'])
+        vision_encoder = vision_encoder.to(device).eval()
     
     policy.estimator.load_state_dict(ac_state_dict['estimator_state_dict'])
     
@@ -143,9 +149,11 @@ def play(args):
     # if not os.path.exists(os.path.join(load_run, "traced")):
     #     os.mkdir(os.path.join(load_run, "traced"))
 
-    if phase == 2:
-        state_dict = {'depth_encoder_state_dict': ac_state_dict['depth_encoder_state_dict']}
-        torch.save(state_dict, os.path.join(load_run, "traced", args.exptid + "-" + str(checkpoint) + "-vision_weight.pt"))
+    # if phase == 2:
+    #     save_file_name = 'traced_model.jit'
+    #     save_path = os.path.join(load_run, save_file_name)
+    #     state_dict = {'depth_encoder_state_dict': ac_state_dict['depth_encoder_state_dict']}
+    #     torch.save(state_dict, )
 
     # Save the traced actor
     policy.eval()
@@ -178,6 +186,20 @@ def play(args):
             save_path = os.path.join(load_run, save_file_name)
             traced_policy.save(save_path)
             print("Saved traced_actor at ", os.path.abspath(save_path))
+
+            # vision encoder
+            save_file_name = 'traced_model_encoder.jit'
+
+            depth = torch.ones(num_envs, 58, 87, device=device)
+            obs = torch.ones(num_envs, n_proprio)
+            test = vision_encoder(depth, obs)
+            
+            traced_policy = torch.jit.script(vision_encoder, (depth, obs))
+            
+            # traced_policy = torch.jit.script(policy)
+            save_path = os.path.join(load_run, save_file_name)
+            traced_policy.save(save_path)
+            print("Saved traced_vision_actor at ", os.path.abspath(save_path))
 
     
 if __name__ == '__main__':

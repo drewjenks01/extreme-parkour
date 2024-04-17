@@ -4,7 +4,7 @@ from json import load
 import torch
 import torch.nn as nn
 
-from rsl_rl.rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RecurrentDepthBackbone
+from rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RecurrentDepthBackbone
 
 class HardwareScandotNN(nn.Module):
     def __init__(   self,  
