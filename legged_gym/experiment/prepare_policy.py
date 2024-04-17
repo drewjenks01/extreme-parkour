@@ -28,7 +28,7 @@ def load_and_save_policy(args):
     phase = args.phase
     extra_name = args.name
 
-    path = f'/home/andrewjenkins/extreme-parkour/legged_gym/logs/parkour_new/phase{phase}_{extra_name}'
+    path = f'../logs/parkour_new/phase{phase}_{extra_name}'
     if not os.path.exists(path):
         os.makedirs(path)
 
@@ -42,6 +42,7 @@ def load_and_save_policy(args):
     actor_path = os.path.join(path, f'model_latest.pt')
     print(f'{run_path}/model_{max_iter}.pt')
     actor_file = run.file(f'model_{max_iter}.pt').download(replace=True, root='./tmp')
+    os.rmdir('./tmp')
     actor = torch.load(actor_file.name, map_location="cpu")
     torch.save(actor, actor_path)
     print('Saved actor')

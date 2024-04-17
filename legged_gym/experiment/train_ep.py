@@ -59,7 +59,8 @@ def class_to_dict(obj) -> dict:
 
 def train(args):
     #args.headless = True
-    log_pth = LEGGED_GYM_ROOT_DIR + "/logs/{}/".format(args.proj_name) + args.exptid
+    #log_pth = LEGGED_GYM_ROOT_DIR + "/logs/{}/".format(args.proj_name) + args.exptid
+    log_pth = "/scratch/awj/logs/{}/".format(args.proj_name) + args.exptid
     try:
         os.makedirs(log_pth)
     except:
