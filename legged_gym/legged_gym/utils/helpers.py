@@ -148,7 +148,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             print('Using RGB domain randomization')
             env_cfg.domain_rand.randomize_lighting = True
             env_cfg.domain_rand.randomize_ground_texture = False
-            env_cfg.domain_rand.randomize_ground_color = True
+            env_cfg.domain_rand.randomize_ground_color = False
         if env_cfg.depth.use_camera and args.headless:  # set camera specific parameters
             env_cfg.env.num_envs = env_cfg.depth.camera_num_envs
             env_cfg.terrain.num_rows = env_cfg.depth.camera_terrain_num_rows
@@ -203,6 +203,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
 
         if args.vision_classifier:
             cfg_train.policy.use_classifier = True
+        if 'phase3' in args.exptid:
+            cfg_train.runner.train_phase3 = True
 
     return env_cfg, cfg_train
 

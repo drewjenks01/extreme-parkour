@@ -78,9 +78,10 @@ def train(args):
     env, env_cfg = task_registry.make_env(name=args.task, args=args)    
     ppo_runner, train_cfg = task_registry.make_alg_runner(log_root = log_pth, env=env, name=args.task, args=args)
 
-    Cfg = class_to_dict(env_cfg)
+    env_cfg.env.wandb_offline = False
 
-    wandb.init(project="walk-these-ways", name=args.exptid, entity="iai-eipo", group=args.exptid[:3], mode=mode, config={'Cfg': Cfg})
+    Cfg = class_to_dict(env_cfg)
+    wandb.init(project="walk-these-ways", name=args.exptid, entity="iai-eipo", group=args.exptid[:3], mode='online', config={'Cfg': Cfg})
     wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot_config.py", policy="now")
     wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot.py", policy="now")
 

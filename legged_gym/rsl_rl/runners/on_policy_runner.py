@@ -80,6 +80,7 @@ class OnPolicyRunner:
         estimator = Estimator(input_dim=env.cfg.env.n_proprio, output_dim=env.cfg.env.n_priv, hidden_dims=self.estimator_cfg["hidden_dims"]).to(self.device)
         # Depth encoder
         self.if_depth = self.depth_encoder_cfg["if_depth"]
+        self.if_rgb = self.cfg['train_phase3']
         if self.if_depth:
             depth_backbone = DepthOnlyFCBackbone58x87(env.cfg.env.n_proprio, 
                                                     self.policy_cfg["scan_encoder_dims"][-1], 
@@ -93,7 +94,7 @@ class OnPolicyRunner:
 
         
         if self.cfg['train_phase3']:
-            rgb_backbone = DepthOnlyFCBackbone58x87(env.cfg.env.n_proprio, 
+            rgb_backbone = RGBOnlyFCBackbone58x87(env.cfg.env.n_proprio, 
                                                     self.policy_cfg["scan_encoder_dims"][-1], 
                                                     self.depth_encoder_cfg["hidden_dims"],
                                                     num_frames=3
@@ -127,8 +128,13 @@ class OnPolicyRunner:
             [self.env.num_privileged_obs], 
             [self.env.num_actions],
         )
-
-        self.learn = self.learn_RL if not self.if_depth else self.learn_vision
+        
+        if self.if_depth and not self.if_rgb:
+            self.learn = self.learn_vision
+        elif self.if_rgb:
+            self.learn = self.learn_rgb_vision
+        else:
+            self.learn = self.learn_RL
             
         # Log
         self.log_dir = log_dir
@@ -367,8 +373,9 @@ class OnPolicyRunner:
             ep_infos.clear()
 
     def learn_rgb_vision(self, num_learning_iterations, init_at_random_ep_len=False):
-        trigger_sync = TriggerWandbSyncHook()
-        wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
+        if self.env.cfg.env.wandb_offline:
+            trigger_sync = TriggerWandbSyncHook()
+            wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
     
         tot_iter = self.current_learning_iteration + num_learning_iterations
         self.start_learning_iteration = copy(self.current_learning_iteration)
@@ -418,7 +425,8 @@ class OnPolicyRunner:
                     # rgb student
                     obs_prop_rgb = obs[:, :self.env.cfg.env.n_proprio].clone()
                     obs_prop_rgb[:, 6:8] = 0
-                    rgb_latent_and_yaw = self.alg.rgb_encoder(infos["rgb"].clone(), obs_prop_rgb)  # clone is crucial to avoid in-place operation
+                    rgb_image = infos["rgb"].clone().squeeze(1)
+                    rgb_latent_and_yaw = self.alg.rgb_encoder(rgb_image, obs_prop_rgb)  # clone is crucial to avoid in-place operation
                     
                     rgb_latent = rgb_latent_and_yaw[:, :-2]
                     rgb_yaw = 1.5*rgb_latent_and_yaw[:, -2:]
@@ -469,13 +477,15 @@ class OnPolicyRunner:
             delta_yaw_ok_percentage = sum(delta_yaw_ok_buffer) / len(delta_yaw_ok_buffer)
             rgb_latent_buffer = torch.cat(rgb_latent_buffer, dim=0)
             depth_latent_buffer = torch.cat(depth_latent_buffer, dim=0)
+            yaw_buffer_student = torch.cat(yaw_buffer_student, dim=0)
+            yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
             rgb_actor_loss = 0
-            rgb_encoder_loss, yaw_loss = self.alg.update_rgb_encoder(rgb_latent_buffer, depth_latent_buffer)
+            rgb_encoder_loss, yaw_loss = self.alg.update_rgb_encoder(rgb_latent_buffer, depth_latent_buffer, yaw_buffer_student, yaw_buffer_teacher)
 
             actions_teacher_buffer = torch.cat(actions_teacher_buffer, dim=0)
             actions_student_buffer = torch.cat(actions_student_buffer, dim=0)
-            yaw_buffer_student = torch.cat(yaw_buffer_student, dim=0)
-            yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
+            # yaw_buffer_student = torch.cat(yaw_buffer_student, dim=0)
+            # yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
            # depth_actor_loss, yaw_loss = self.alg.update_depth_actor(actions_student_buffer, actions_teacher_buffer, yaw_buffer_student, yaw_buffer_teacher)
 
             # depth_encoder_loss, depth_actor_loss = self.alg.update_depth_both(depth_latent_buffer, scandots_latent_buffer, actions_student_buffer, actions_teacher_buffer)
@@ -492,7 +502,8 @@ class OnPolicyRunner:
                (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
                (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
                     self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
-            trigger_sync()
+            if self.env.cfg.env.wandb_offline:
+                trigger_sync()
             ep_infos.clear()
     
     def log_vision(self, locs, width=80, pad=35):
@@ -655,7 +666,7 @@ class OnPolicyRunner:
             video_array = np.concatenate([np.expand_dims(frame, axis=0) for frame in frames ], axis=0).swapaxes(1, 3).swapaxes(2, 3)
             print(video_array.shape)
             # logger.save_video(frames, f"videos/{it:05d}.mp4", fps=1 / self.env.dt)
-            wandb.log({"video": wandb.Video(video_array, fps=1 / self.env.dt)}, step=it)
+            wandb.log({"video": wandb.Video(video_array, fps=30 / self.env.dt)}, step=it)
 
     
     def log(self, locs, width=80, pad=35):

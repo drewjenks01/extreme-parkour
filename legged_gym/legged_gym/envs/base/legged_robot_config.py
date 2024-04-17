@@ -41,6 +41,7 @@ class LeggedRobotCfg(BaseConfig):
     class env:
         num_envs = 6144
         record_video = True
+        wandb_offline = False
 
         n_scan = 132
         n_priv = 3+3 +3
