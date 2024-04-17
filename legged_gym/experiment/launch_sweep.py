@@ -21,26 +21,11 @@ if __name__ == '__main__':
     
     args = get_args()
 
-    if args.both_phases:
-
-        for i in range(1, 3):
-            print(f'Training phase: {i}')
-
-            if i == 2:
-                args.exptid = args.exptid.replace('phase1', 'phase2')
-                args.use_camera = True
-                args.resume = True
-                args.resume_path = 
-
-
-
-
-    for i, kwargs in enumerate(sweep):
-        verbose = True # set to True for debugging
-        jaynes.config(verbose=verbose)
-        train_fn = functools.partial(train, args)
-        jaynes.add(train_fn)
-        jaynes.execute()
+    verbose = True # set to True for debugging
+    jaynes.config(verbose=verbose)
+    train_fn = functools.partial(train, args)
+    jaynes.add(train_fn)
+    jaynes.execute()
     # for i, kwargs in enumerate(sweep):
     #     jaynes.config(verbose=verbose)
     #     train_fn = functools.partial(train, args)

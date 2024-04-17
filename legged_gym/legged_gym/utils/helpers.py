@@ -123,13 +123,31 @@ def get_load_path(root, load_run=-1, checkpoint=-1, model_name_include="model"):
 def update_cfg_from_args(env_cfg, cfg_train, args):
     # seed
     if env_cfg is not None:
+        if 'go1' in args.exptid:
+            print('Using go1 settings')
+            env_cfg.depth.position = [0.3, 0, 0]
+            env_cfg.asset.flip_visual_attachments = False
+            env_cfg.asset.file = '{LEGGED_GYM_ROOT_DIR}/resources/robots/go1_wtw/urdf/go1_v2.urdf'
+        if 'phase2' in args.exptid:
+            print('Using phase2 settings')
+            args.delay = True
+            args.use_camera = True
+            args.resume = True
+        elif 'phase3' in args.exptid:
+            print('Using phase3 settings')
+            args.delay = True
+            args.use_camera = True
+            args.resume = True
+            args.use_rgb = True
+
         if args.use_camera:
             env_cfg.depth.use_camera = args.use_camera
         if args.use_rgb:
             env_cfg.depth.use_rgb = args.use_rgb
         if args.rgb_domain_rand:
+            print('Using RGB domain randomization')
             env_cfg.domain_rand.randomize_lighting = True
-            env_cfg.domain_rand.randomize_ground_texture = True
+            env_cfg.domain_rand.randomize_ground_texture = False
             env_cfg.domain_rand.randomize_ground_color = True
         if env_cfg.depth.use_camera and args.headless:  # set camera specific parameters
             env_cfg.env.num_envs = env_cfg.depth.camera_num_envs

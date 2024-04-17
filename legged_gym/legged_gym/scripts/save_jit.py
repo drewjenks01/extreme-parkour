@@ -3,9 +3,9 @@ from statistics import mode
 sys.path.append("../../../rsl_rl")
 import torch
 import torch.nn as nn
-from rsl_rl.rsl_rl.modules.actor_critic import Actor, StateHistoryEncoder, get_activation, ActorCriticRMA
-from rsl_rl.rsl_rl.modules.estimator import Estimator
-from rsl_rl.rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RecurrentDepthBackbone
+from rsl_rl.modules.actor_critic import Actor, StateHistoryEncoder, get_activation, ActorCriticRMA
+from rsl_rl.modules.estimator import Estimator
+from rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RecurrentDepthBackbone
 import argparse
 import code
 import shutil
