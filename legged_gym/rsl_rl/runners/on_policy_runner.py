@@ -666,7 +666,7 @@ class OnPolicyRunner:
             video_array = np.concatenate([np.expand_dims(frame, axis=0) for frame in frames ], axis=0).swapaxes(1, 3).swapaxes(2, 3)
             print(video_array.shape)
             # logger.save_video(frames, f"videos/{it:05d}.mp4", fps=1 / self.env.dt)
-            wandb.log({"video": wandb.Video(video_array, fps=30 / self.env.dt)}, step=it)
+            wandb.log({"video": wandb.Video(video_array, fps=50)}, step=it)
 
     
     def log(self, locs, width=80, pad=35):
