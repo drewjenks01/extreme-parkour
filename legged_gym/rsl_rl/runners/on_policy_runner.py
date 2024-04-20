@@ -195,7 +195,7 @@ class OnPolicyRunner:
         tot_iter = self.current_learning_iteration + num_learning_iterations
         self.start_learning_iteration = copy(self.current_learning_iteration)
 
-        for it in range(self.current_learning_iteration, tot_iter):
+        for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
             start = time.time()
             hist_encoding = it % self.dagger_update_freq == 0
 
@@ -288,7 +288,7 @@ class OnPolicyRunner:
 
         num_pretrain_iter = 0
         depth_saved=False
-        for it in range(self.current_learning_iteration, tot_iter):
+        for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
             start = time.time()
             depth_latent_buffer = []
             scandots_latent_buffer = []
@@ -410,7 +410,7 @@ class OnPolicyRunner:
             param.requires_grad = False
 
         num_pretrain_iter = 0
-        for it in range(self.current_learning_iteration, tot_iter):
+        for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
             start = time.time()
             depth_latent_buffer = []
             rgb_latent_buffer = []

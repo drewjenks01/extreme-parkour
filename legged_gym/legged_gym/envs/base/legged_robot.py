@@ -100,8 +100,9 @@ class LeggedRobot(BaseTask):
 
         if self.cfg.depth.clip_encoder or self.cfg.depth.mnet_encoder:
             self.rgb_resize_transform = torchvision.transforms.Compose([
-                #Resize(224, interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
-                #CenterCrop(224),
+                Resize((self.cfg.depth.mnet_resized[1], self.cfg.depth.mnet_resized[0]), 
+                                                                interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
+                                                                #CenterCrop(224),
                 Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),])
 
         
@@ -909,8 +910,8 @@ class LeggedRobot(BaseTask):
                     self.rgb_buffer = torch.zeros(self.num_envs,  
                                             self.cfg.depth.buffer_len, 
                                             3,
-                                            128, 
-                                            128).to(self.device)
+                                            self.cfg.depth.mnet_resized[1], 
+                                            self.cfg.depth.mnet_resized[0]).to(self.device)
 
                 else:
                     self.rgb_buffer = torch.zeros(self.num_envs,  
@@ -1002,12 +1003,6 @@ class LeggedRobot(BaseTask):
             camera_props = gymapi.CameraProperties()
             camera_props.width = self.cfg.depth.original[0]
             camera_props.height = self.cfg.depth.original[1]
-            if self.cfg.depth.clip_encoder:
-                camera_props.width = 224
-                camera_props.height = 224
-            elif self.cfg.depth.mnet_encoder:
-                camera_props.width = 128
-                camera_props.height = 128
             camera_props.enable_tensors = True
             camera_horizontal_fov = self.cfg.depth.horizontal_fov 
             camera_props.horizontal_fov = camera_horizontal_fov

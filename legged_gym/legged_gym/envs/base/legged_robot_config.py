@@ -411,6 +411,7 @@ class LeggedRobotCfgPPO(BaseConfig):
 
         clip_encoder = False
         dino_encoder = False
+        mnet_encoder = False
 
     class estimator:
         train_with_estimated_states = True
