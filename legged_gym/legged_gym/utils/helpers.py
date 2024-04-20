@@ -154,7 +154,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
         if args.rgb_domain_rand:
             print('Using RGB domain randomization')
             env_cfg.domain_rand.randomize_lighting = True
-            env_cfg.domain_rand.randomize_ground_texture = False
+            env_cfg.domain_rand.randomize_ground_texture = True
             env_cfg.domain_rand.randomize_ground_color = False
         if env_cfg.depth.use_camera and args.headless:  # set camera specific parameters
             env_cfg.env.num_envs = env_cfg.depth.camera_num_envs
