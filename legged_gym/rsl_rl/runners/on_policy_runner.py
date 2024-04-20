@@ -251,13 +251,13 @@ class OnPolicyRunner:
                 self.log(locals())
             if it < 2500:
                 if it % self.save_interval == 0:
-                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+                    self.save( 'model_{}.pt'.format(it))
             elif it < 5000:
                 if it % (2*self.save_interval) == 0:
-                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+                    self.save( 'model_{}.pt'.format(it))
             else:
                 if it % (5*self.save_interval) == 0:
-                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+                    self.save( 'model_{}.pt'.format(it))
             trigger_sync()
             ep_infos.clear()
         
@@ -377,7 +377,7 @@ class OnPolicyRunner:
             if (it-self.start_learning_iteration < 2500 and it % self.save_interval == 0) or \
                (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
                (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
-                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+                    self.save( 'model_{}.pt'.format(it))
             trigger_sync()
             ep_infos.clear()
 
@@ -511,7 +511,7 @@ class OnPolicyRunner:
             if (it-self.start_learning_iteration < 2500 and it % self.save_interval == 0) or \
                (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
                (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
-                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it+self.resume_num)))
+                    self.save( 'model_{}.pt'.format(it))
             if self.env.cfg.env.wandb_offline:
                 trigger_sync()
             ep_infos.clear()
