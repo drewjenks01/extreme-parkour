@@ -1,3 +1,5 @@
 source /afs/csail/u/a/awj/anaconda3/bin/activate parkour
 export LD_LIBRARY_PATH=/content/conda-env/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64
 export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/afs/csail/u/a/awj/anaconda3/envs/parkour/lib/
+git config --global user.email "awj@mit.edu"
+git config --global user.name "drewjenks01"
