@@ -193,12 +193,6 @@ class LeggedRobot(BaseTask):
             rgb_image = rgb_image[:, :-1, 4:-1]
             # switch color channels to be first
 
-            # if self.cfg.domain_rand.randomize_ground_color:
-            #     # randomize color of light grey pixels -- where r==g==b and r>=128
-            #     mask = (rgb_image[0] == rgb_image[1]) & (rgb_image[0] == rgb_image[2]) & (rgb_image[0] >= 128)
-            #     rgb_image = torch.where(mask, torch.randint(0, 256, (3, ), device=self.device), rgb_image[:, mask])
-
-
             #print(rgb_image.shape, rgb_image)
             #rgb_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
             #rgb_image = torch.clip(rgb_image, -self.cfg.depth.far_clip, -self.cfg.depth.near_clip)
@@ -1095,24 +1089,24 @@ class LeggedRobot(BaseTask):
         self.cam_tensors = []
         self.mass_params_tensor = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
 
-        if self.cfg.domain_rand.randomize_ground_texture:
-            urdf_root = '/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/urdf'
-            options = gymapi.AssetOptions()
-            options.fix_base_link = True
-            options.armature = 0.01
-            options.density = 1000
-            options.use_mesh_materials = True
-            options.mesh_normal_mode = gymapi.COMPUTE_PER_VERTEX
-            options.override_com = True
-            options.override_inertia = True
-            options.vhacd_enabled = True
-            options.vhacd_params = gymapi.VhacdParams()
-            options.vhacd_params.resolution = 3000000
-            options.vhacd_params.max_num_vertices_per_ch = 1024
-            options.vhacd_params.max_convex_hulls = 64
-            options.vhacd_params.concavity = 0.0
-            for filename in os.listdir(urdf_root):
-                loaded_asset = self.gym.load_asset(self.sim, urdf_root, filename, options)
+        # if self.cfg.domain_rand.randomize_ground_texture:
+        #     urdf_root = '/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes'
+        #     options = gymapi.AssetOptions()
+        #     options.fix_base_link = True
+        #     options.armature = 0.01
+        #     options.density = 1000
+        #     options.use_mesh_materials = True
+        #     options.mesh_normal_mode = gymapi.COMPUTE_PER_VERTEX
+        #     options.override_com = True
+        #     options.override_inertia = True
+        #     options.vhacd_enabled = True
+        #     options.vhacd_params = gymapi.VhacdParams()
+        #     options.vhacd_params.resolution = 3000000
+        #     options.vhacd_params.max_num_vertices_per_ch = 1024
+        #     options.vhacd_params.max_convex_hulls = 64
+        #     options.vhacd_params.concavity = 0.0
+        #     for filename in os.listdir(urdf_root):
+        #         loaded_asset = self.gym.load_asset(self.sim, urdf_root, filename, options)
         
         print("Creating env...")
         for i in tqdm(range(self.num_envs)):
@@ -1129,8 +1123,6 @@ class LeggedRobot(BaseTask):
             rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
             self.gym.set_asset_rigid_shape_properties(robot_asset, rigid_shape_props)
             anymal_handle = self.gym.create_actor(env_handle, robot_asset, start_pose, "anymal", i, self.cfg.asset.self_collisions, 0)
-            if self.cfg.domain_rand.randomize_ground_texture:
-                self.gym.set_rigid_body_texture(env_handle, anymal_handle, 1, gymapi.MeshType.MESH_VISUAL, textures[i%4])
             # if self.cfg.domain_rand.randomize_ground_color:
             #     color = list(np.random.uniform(0, 1, size=3))
             #     self.gym.set_rigid_body_color(env_handle, anymal_handle, -1, gymapi.MESH_VISUAL, gymapi.Vec3(color[0], color[1], color[2]))
@@ -1147,25 +1139,34 @@ class LeggedRobot(BaseTask):
 
             self.mass_params_tensor[i, :] = torch.from_numpy(mass_params).to(self.device).to(torch.float)
 
-            if self.cfg.domain_rand.randomize_ground_texture:
-                ball_rigid_shape_props = self._process_ball_rigid_shape_props(ball_rigid_shape_props_asset, i)
-                self.gym.set_asset_rigid_shape_properties(self.ball_asset, ball_rigid_shape_props)
-                ball_handle = self.gym.create_actor(env_handle, self.ball_asset, self.ball_init_pose, "ball", i, 0)
-                color = gymapi.Vec3(1, 1, 0)
-                # self.gym.set_rigid_body_color(env_handle, ball_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, color)
-                texture_path = f'{os.path.dirname(os.path.dirname(os.path.realpath(__file__)))}/../../resources/textures/soccer_ball_texture.jpeg'
-                # texture_path = f'{os.path.dirname(os.path.dirname(os.path.realpath(__file__)))}/../../resources/textures/snow.jpg'
-                texture = self.gym.create_texture_from_file(self.sim, texture_path)
-                self.gym.set_rigid_body_texture(env_handle, ball_handle, 0, gymapi.MeshType.MESH_VISUAL_AND_COLLISION, texture)
-                ball_idx = self.gym.get_actor_rigid_body_index(env_handle, ball_handle, 0, gymapi.DOMAIN_SIM)
-                ball_body_props = self.gym.get_actor_rigid_body_properties(env_handle, ball_handle)
-                ball_body_props[0].mass = self.cfg.object.mass*(np.random.rand()*0.3+0.5)
-                self.gym.set_actor_rigid_body_properties(env_handle, ball_handle, ball_body_props, recomputeInertia=True)
-                # self.gym.set_actor_rigid_shape_properties(env_handle, ball_handle, ball_shape_props)
-                self.object_actor_handles.append(ball_handle)
-                self.object_rigid_body_idxs.append(ball_idx)
-                self.object_actor_idxs.append(self.gym.get_actor_index(env_handle, ball_handle, gymapi.DOMAIN_SIM))
-
+        if self.cfg.domain_rand.randomize_ground_texture:
+            options = gymapi.AssetOptions()
+            options.fix_base_link = True
+            options.armature = 0.01
+            options.density = 1000
+            options.use_mesh_materials = True
+            options.mesh_normal_mode = gymapi.COMPUTE_PER_VERTEX
+            options.override_com = True
+            options.override_inertia = True
+            options.vhacd_enabled = True
+            options.vhacd_params = gymapi.VhacdParams()
+            options.vhacd_params.resolution = 3000000
+            options.vhacd_params.max_num_vertices_per_ch = 1024
+            options.vhacd_params.max_convex_hulls = 64
+            options.vhacd_params.concavity = 0.0
+            urdf_root = '/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes'
+            loaded_asset = self.gym.load_asset(self.sim, urdf_root, 'rectangular_prism_bumps.urdf', options)
+            for i in range(self.num_envs):
+                env_handle = self.envs[i]
+                start_pose = gymapi.Transform()
+                start_pose.p = gymapi.Vec3(0.0, 0.0, 0.0)
+                start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
+                rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
+                self.gym.set_asset_rigid_shape_properties(loaded_asset, rigid_shape_props)
+                ground_handle = self.gym.create_actor(env_handle, loaded_asset, start_pose, "ground", i, 0, 0)
+                self.gym.set_rigid_body_color(env_handle, ground_handle, 0, gymapi.MESH_VISUAL, gymapi.Vec3(0.5, 0.5, 0.5))
+                self.gym.set_rigid_body_texture(env_handle, ground_handle, 0, gymapi.MeshType.MESH_VISUAL, textures[i%4])
+        
         if self.cfg.domain_rand.randomize_friction:
             self.friction_coeffs_tensor = self.friction_coeffs.to(self.device).to(torch.float).squeeze(-1)
 

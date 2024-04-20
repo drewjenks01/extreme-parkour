@@ -58,3 +58,9 @@ for i in names_and_positions['rectangular_prisms']:
 
     urdf_filepath = filepath.replace('sep', 'urdf').replace('.obj','.urdf')
     obj_to_urdf(filepath, urdf_filepath,pos)
+
+
+filepath = '/home/andrewjenkins/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/rectangular_prism_bumps.obj'
+pos = [0,0]
+urdf_filepath = filepath.replace('sep', 'urdf').replace('.obj','.urdf')
+obj_to_urdf(filepath, urdf_filepath,pos)

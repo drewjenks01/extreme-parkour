@@ -126,8 +126,10 @@ def play(args):
     
     policy = ppo_runner.get_inference_policy(device=env.device)
     if env.cfg.depth.use_camera:
-        depth_encoder = ppo_runner.get_depth_encoder_inference_policy(device=env.device)
-    
+        if env.cfg.depth.use_rgb:
+            vision_encoder = ppo_runner.get_rgb_encoder_inference_policy(device=env.device)
+        else:
+            vision_encoder = ppo_runner.get_depth_encoder_inference_policy(device=env.device)
     total_steps = 1000
     rewbuffer = deque(maxlen=total_steps)
     lenbuffer = deque(maxlen=total_steps)
@@ -142,28 +144,37 @@ def play(args):
 
     actions = torch.zeros(env.num_envs, 12, device=env.device, requires_grad=False)
     infos = {}
-    infos["depth"] = env.depth_buffer.clone().to(ppo_runner.device)[:, -1] if ppo_runner.if_depth else None
+
+    image_type = "rgb" if env.cfg.depth.use_rgb else "depth"
+    
+    if env.cfg.depth.use_rgb:
+        infos["rgb"] = env.rgb_buffer.clone().to(ppo_runner.device)[:, -1] if ppo_runner.if_rgb else None
+    else:
+        infos["depth"] = env.depth_buffer.clone().to(ppo_runner.device)[:, -1] if ppo_runner.if_depth else None
 
     for i in tqdm(range(1500)):
 
         if env.cfg.depth.use_camera:
-            if infos["depth"] is not None:
+            if infos[image_type] is not None:
                 obs_student = obs[:, :env.cfg.env.n_proprio]
                 obs_student[:, 6:8] = 0
                 with torch.no_grad():
-                    depth_latent_and_yaw = depth_encoder(infos["depth"], obs_student)
-                depth_latent = depth_latent_and_yaw[:, :-2]
-                yaw = depth_latent_and_yaw[:, -2:]
+                    vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
+                vision_latent = vision_latent_and_yaw[:, :-2]
+                yaw = vision_latent_and_yaw[:, -2:]
             obs[:, 6:8] = 1.5*yaw
                 
         else:
-            depth_latent = None
+            vision_latent = None
 
-        if hasattr(ppo_runner.alg, "depth_actor"):
+        if hasattr(ppo_runner.alg, "rgb_actor"):
             with torch.no_grad():
-                actions = ppo_runner.alg.depth_actor(obs.detach(), hist_encoding=True, scandots_latent=depth_latent)
+                actions = ppo_runner.alg.rgb_actor(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
+        elif hasattr(ppo_runner.alg, "depth_actor"):
+            with torch.no_grad():
+                actions = ppo_runner.alg.depth_actor(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
         else:
-            actions = policy(obs.detach(), hist_encoding=True, scandots_latent=depth_latent)
+            actions = policy(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
             
         cur_goal_idx = env.cur_goal_idx.clone()
         obs, _, rews, dones, infos = env.step(actions.detach())

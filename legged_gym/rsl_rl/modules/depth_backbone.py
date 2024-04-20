@@ -2,7 +2,6 @@ import torch
 import torch.nn as nn
 import sys
 import torchvision
-import clip
 
 
 class RecurrentDepthBackbone(nn.Module):

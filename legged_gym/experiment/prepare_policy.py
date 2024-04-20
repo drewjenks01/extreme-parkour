@@ -18,6 +18,8 @@ def load_and_save_policy(args):
     api = wandb.Api()
     run = api.run(run_path)
 
+    run_name = run.name
+
     run_files  = run.files()
 
     all_cfg = run.config
@@ -40,8 +42,8 @@ def load_and_save_policy(args):
         max_iter = max([int(f.name.split('_')[-1].replace('.pt', '')) for f in actor_files])
 
     actor_path = os.path.join(path, f'model_latest.pt')
-    print(f'{run_path}/model_{max_iter}.pt')
-    actor_file = run.file(f'model_{max_iter}.pt').download(replace=True, root='./tmp')
+    print(f'{run_path}/{run_name}/model_{max_iter}.pt')
+    actor_file = run.file(f'{run_name}/model_{max_iter}.pt').download(replace=True, root='./tmp')
     actor = torch.load(actor_file.name, map_location="cpu")
     torch.save(actor, actor_path)
     print('Saved actor')
