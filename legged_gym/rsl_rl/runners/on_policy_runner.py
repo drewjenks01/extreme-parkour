@@ -815,8 +815,11 @@ class OnPolicyRunner:
                 warnings.warn("'rgb_encoder_state_dict' key does not exist, not loading rgb encoder...")
             else:
                 print("Saved rgb encoder detected, loading...")
-                save_iter = int(path.split('_')[-1].replace('.pt',''))
-                self.resume_num = save_iter
+                try:
+                    save_iter = int(path.split('_')[-1].replace('.pt',''))
+                    self.resume_num = save_iter
+                except:
+                    self.resume_num = 0
                 self.alg.rgb_encoder.load_state_dict(loaded_dict['rgb_encoder_state_dict'])
             if 'rgb_actor_state_dict' in loaded_dict:
                 print("Saved rgb actor detected, loading...")
@@ -860,6 +863,12 @@ class OnPolicyRunner:
         if device is not None:
             self.alg.depth_encoder.to(device)
         return self.alg.depth_encoder
+    
+    def get_rgb_encoder_inference_policy(self, device=None):
+        self.alg.rgb_encoder.eval()
+        if device is not None:
+            self.alg.rgb_encoder.to(device)
+        return self.alg.rgb_encoder
     
     def get_disc_inference_policy(self, device=None):
         self.alg.discriminator.eval() # switch to evaluation mode (dropout for example)
