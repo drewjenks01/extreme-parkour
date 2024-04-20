@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import sys
 import torchvision
+import clip
+
 
 class RecurrentDepthBackbone(nn.Module):
     def __init__(self, base_backbone, env_cfg) -> None:
@@ -169,3 +171,52 @@ class RecurrentDepthBackboneClassifier(nn.Module):
 
     def detach_hidden_states(self):
         self.hidden_states = self.hidden_states.detach().clone()
+
+
+class RGBMobileNetBackbone(nn.Module):
+    def __init__(self, scandots_output_dim):
+        super().__init__()
+        #self.model,_ = clip.load("RN50")
+        self.model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True)
+        self.model.classifier = nn.Identity()
+        self.model.eval()
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        activation = nn.ELU()
+        self.latent_compression = nn.Sequential(
+            activation,
+            # MN output -> latent dim
+            nn.Linear(1280, scandots_output_dim)
+        )
+
+    def forward(self, images: torch.Tensor):
+        with torch.no_grad():
+            image_features = self.model(images)
+        latent = self.latent_compression(image_features)
+
+        return latent
+    
+class RGBDinoBackbone(nn.Module):
+    def __init__(self, scandots_output_dim):
+        super().__init__()
+        self.model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14', pretrained=True)
+        self.model.eval()
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        activation = nn.ELU()
+        self.latent_compression = nn.Sequential(
+            activation,
+            # clip output -> latent dim
+            nn.Linear(384, scandots_output_dim)
+        )
+
+    def forward(self, images: torch.Tensor):
+        with torch.no_grad():
+            image_features = self.model(images)
+        latent = self.latent_compression(image_features)
+
+        return latent

@@ -33,6 +33,7 @@ from time import time
 from warnings import WarningMessage
 import numpy as np
 import os
+from torchvision.transforms import Compose, Resize, CenterCrop, Normalize
 
 from isaacgym.torch_utils import *
 from isaacgym import gymtorch, gymapi, gymutil
@@ -97,8 +98,16 @@ class LeggedRobot(BaseTask):
         self._parse_cfg(self.cfg)
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
 
+        if self.cfg.depth.clip_encoder or self.cfg.depth.mnet_encoder:
+            self.rgb_resize_transform = torchvision.transforms.Compose([
+                #Resize(224, interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
+                #CenterCrop(224),
+                Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),])
+
+        
         self.resize_transform = torchvision.transforms.Resize((self.cfg.depth.resized[1], self.cfg.depth.resized[0]), 
-                                                              interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
+                                                                interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
+        
         
         if not self.headless:
             self.set_camera(self.cfg.viewer.pos, self.cfg.viewer.lookat)
@@ -172,23 +181,29 @@ class LeggedRobot(BaseTask):
         return depth_image
     
     def process_rgb_image(self, rgb_image, env_id):
-        # These operations are replicated on the hardware
-        rgb_image = rgb_image[:-2, 4:-4, :3]
+        rgb_image = rgb_image[:, :, :3]
         # switch color channels to be first
         rgb_image = rgb_image.permute(2, 0, 1)
+        if self.cfg.depth.mnet_encoder or self.cfg.depth.clip_encoder:
+            rgb_image = rgb_image / 255.0
+            rgb_image = self.rgb_resize_transform(rgb_image)
+        else:
+            # These operations are replicated on the hardware
+            rgb_image = rgb_image[:, :-1, 4:-1]
+            # switch color channels to be first
 
-        # if self.cfg.domain_rand.randomize_ground_color:
-        #     # randomize color of light grey pixels -- where r==g==b and r>=128
-        #     mask = (rgb_image[0] == rgb_image[1]) & (rgb_image[0] == rgb_image[2]) & (rgb_image[0] >= 128)
-        #     rgb_image = torch.where(mask, torch.randint(0, 256, (3, ), device=self.device), rgb_image[:, mask])
+            # if self.cfg.domain_rand.randomize_ground_color:
+            #     # randomize color of light grey pixels -- where r==g==b and r>=128
+            #     mask = (rgb_image[0] == rgb_image[1]) & (rgb_image[0] == rgb_image[2]) & (rgb_image[0] >= 128)
+            #     rgb_image = torch.where(mask, torch.randint(0, 256, (3, ), device=self.device), rgb_image[:, mask])
 
 
-        #print(rgb_image.shape, rgb_image)
-        #rgb_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
-        #rgb_image = torch.clip(rgb_image, -self.cfg.depth.far_clip, -self.cfg.depth.near_clip)
-        rgb_image = self.resize_transform(rgb_image[None, :]).squeeze()
-        rgb_image = rgb_image / 255.0
-        #rgb_image = self.normalize_depth_image(rgb_image)
+            #print(rgb_image.shape, rgb_image)
+            #rgb_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
+            #rgb_image = torch.clip(rgb_image, -self.cfg.depth.far_clip, -self.cfg.depth.near_clip)
+            rgb_image = self.resize_transform(rgb_image[None, :]).squeeze()
+            rgb_image = rgb_image / 255.0
+            #rgb_image = self.normalize_depth_image(rgb_image)
         return rgb_image
     
     def process_depth_image(self, depth_image, env_id):
@@ -883,11 +898,27 @@ class LeggedRobot(BaseTask):
                                             self.cfg.depth.resized[0]).to(self.device)
             
             if self.cfg.depth.use_rgb:
-                self.rgb_buffer = torch.zeros(self.num_envs,  
+                if self.cfg.depth.clip_encoder or self.cfg.depth.mnet_encoder:
+                    self.rgb_buffer = torch.zeros(self.num_envs,  
                                             self.cfg.depth.buffer_len, 
                                             3,
-                                            self.cfg.depth.resized[1], 
-                                            self.cfg.depth.resized[0]).to(self.device)
+                                            224, 
+                                            224).to(self.device)
+
+                if self.cfg.depth.mnet_encoder:
+                    self.rgb_buffer = torch.zeros(self.num_envs,  
+                                            self.cfg.depth.buffer_len, 
+                                            3,
+                                            128, 
+                                            128).to(self.device)
+
+                else:
+                    self.rgb_buffer = torch.zeros(self.num_envs,  
+                                                    self.cfg.depth.buffer_len, 
+                                                    3,
+                                                    self.cfg.depth.resized[1], 
+                                                    self.cfg.depth.resized[0]).to(self.device)
+                
 
 
     def _prepare_reward_function(self):
@@ -971,6 +1002,12 @@ class LeggedRobot(BaseTask):
             camera_props = gymapi.CameraProperties()
             camera_props.width = self.cfg.depth.original[0]
             camera_props.height = self.cfg.depth.original[1]
+            if self.cfg.depth.clip_encoder:
+                camera_props.width = 224
+                camera_props.height = 224
+            elif self.cfg.depth.mnet_encoder:
+                camera_props.width = 128
+                camera_props.height = 128
             camera_props.enable_tensors = True
             camera_horizontal_fov = self.cfg.depth.horizontal_fov 
             camera_props.horizontal_fov = camera_horizontal_fov
@@ -1062,6 +1099,25 @@ class LeggedRobot(BaseTask):
         self.cam_handles = []
         self.cam_tensors = []
         self.mass_params_tensor = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
+
+        if self.cfg.domain_rand.randomize_ground_texture:
+            urdf_root = '/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/urdf'
+            options = gymapi.AssetOptions()
+            options.fix_base_link = True
+            options.armature = 0.01
+            options.density = 1000
+            options.use_mesh_materials = True
+            options.mesh_normal_mode = gymapi.COMPUTE_PER_VERTEX
+            options.override_com = True
+            options.override_inertia = True
+            options.vhacd_enabled = True
+            options.vhacd_params = gymapi.VhacdParams()
+            options.vhacd_params.resolution = 3000000
+            options.vhacd_params.max_num_vertices_per_ch = 1024
+            options.vhacd_params.max_convex_hulls = 64
+            options.vhacd_params.concavity = 0.0
+            for filename in os.listdir(urdf_root):
+                loaded_asset = self.gym.load_asset(self.sim, urdf_root, filename, options)
         
         print("Creating env...")
         for i in tqdm(range(self.num_envs)):
@@ -1095,6 +1151,26 @@ class LeggedRobot(BaseTask):
             self.attach_camera(i, env_handle, anymal_handle)
 
             self.mass_params_tensor[i, :] = torch.from_numpy(mass_params).to(self.device).to(torch.float)
+
+            if self.cfg.domain_rand.randomize_ground_texture:
+                ball_rigid_shape_props = self._process_ball_rigid_shape_props(ball_rigid_shape_props_asset, i)
+                self.gym.set_asset_rigid_shape_properties(self.ball_asset, ball_rigid_shape_props)
+                ball_handle = self.gym.create_actor(env_handle, self.ball_asset, self.ball_init_pose, "ball", i, 0)
+                color = gymapi.Vec3(1, 1, 0)
+                # self.gym.set_rigid_body_color(env_handle, ball_handle, 0, gymapi.MESH_VISUAL_AND_COLLISION, color)
+                texture_path = f'{os.path.dirname(os.path.dirname(os.path.realpath(__file__)))}/../../resources/textures/soccer_ball_texture.jpeg'
+                # texture_path = f'{os.path.dirname(os.path.dirname(os.path.realpath(__file__)))}/../../resources/textures/snow.jpg'
+                texture = self.gym.create_texture_from_file(self.sim, texture_path)
+                self.gym.set_rigid_body_texture(env_handle, ball_handle, 0, gymapi.MeshType.MESH_VISUAL_AND_COLLISION, texture)
+                ball_idx = self.gym.get_actor_rigid_body_index(env_handle, ball_handle, 0, gymapi.DOMAIN_SIM)
+                ball_body_props = self.gym.get_actor_rigid_body_properties(env_handle, ball_handle)
+                ball_body_props[0].mass = self.cfg.object.mass*(np.random.rand()*0.3+0.5)
+                self.gym.set_actor_rigid_body_properties(env_handle, ball_handle, ball_body_props, recomputeInertia=True)
+                # self.gym.set_actor_rigid_shape_properties(env_handle, ball_handle, ball_shape_props)
+                self.object_actor_handles.append(ball_handle)
+                self.object_rigid_body_idxs.append(ball_idx)
+                self.object_actor_idxs.append(self.gym.get_actor_index(env_handle, ball_handle, gymapi.DOMAIN_SIM))
+
         if self.cfg.domain_rand.randomize_friction:
             self.friction_coeffs_tensor = self.friction_coeffs.to(self.device).to(torch.float).squeeze(-1)
 

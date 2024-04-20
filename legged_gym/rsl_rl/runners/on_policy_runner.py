@@ -94,11 +94,18 @@ class OnPolicyRunner:
 
         
         if self.cfg['train_phase3']:
-            rgb_backbone = RGBOnlyFCBackbone58x87(env.cfg.env.n_proprio, 
-                                                    self.policy_cfg["scan_encoder_dims"][-1], 
-                                                    self.depth_encoder_cfg["hidden_dims"],
-                                                    num_frames=3
-                                                    )
+            if self.depth_encoder_cfg['clip_encoder']:
+                print('Using pretrained CLIP encoder')
+                rgb_backbone = RGBClipBackbone(self.policy_cfg["scan_encoder_dims"][-1])
+            elif self.depth_encoder_cfg['mnet_encoder']:
+                print('Using pretrained MobileNetV2 encoder')
+                rgb_backbone = RGBMobileNetBackbone(self.policy_cfg["scan_encoder_dims"][-1])
+            else:
+                rgb_backbone = RGBOnlyFCBackbone58x87(env.cfg.env.n_proprio, 
+                                                        self.policy_cfg["scan_encoder_dims"][-1], 
+                                                        self.depth_encoder_cfg["hidden_dims"],
+                                                        num_frames=3
+                                                        )
             rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg).to(self.device)
             rgb_actor = deepcopy(actor_critic.actor)
         else:
@@ -144,6 +151,8 @@ class OnPolicyRunner:
         self.current_learning_iteration = 0
         self.save_video_interval = 500
         self.last_recording_it = -1*self.save_video_interval
+
+        self.resume_num = 0
         
 
     def learn_RL(self, num_learning_iterations, init_at_random_ep_len=False):
@@ -420,7 +429,8 @@ class OnPolicyRunner:
                     depth_yaw = 1.5*depth_latent_and_yaw[:, -2:]
                     
                     depth_latent_buffer.append(depth_latent)
-                    yaw_buffer_teacher.append(depth_yaw)
+                    #yaw_buffer_teacher.append(depth_yaw)
+                    yaw_buffer_teacher.append(obs[:, 6:8])
                     
                     # rgb student
                     obs_prop_rgb = obs[:, :self.env.cfg.env.n_proprio].clone()
@@ -501,7 +511,7 @@ class OnPolicyRunner:
             if (it-self.start_learning_iteration < 2500 and it % self.save_interval == 0) or \
                (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
                (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
-                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it+self.resume_num)))
             if self.env.cfg.env.wandb_offline:
                 trigger_sync()
             ep_infos.clear()
@@ -599,7 +609,7 @@ class OnPolicyRunner:
                         ep_info[key] = ep_info[key].unsqueeze(0)
                     infotensor = torch.cat((infotensor, ep_info[key].to(self.device)))
                 value = torch.mean(infotensor)
-                wandb_dict['return/rew_' + key] = value
+                wandb_dict['return/' + key] = value
                 ep_string += f"""{f'Mean episode {key}:':>{pad}} {value:.4f}\n"""
         #mean_std = self.alg.actor_critic.std.mean()
         fps = int(self.num_steps_per_env * self.env.num_envs / (locs['collection_time'] + locs['learn_time']))
@@ -777,8 +787,8 @@ class OnPolicyRunner:
             state_dict['depth_encoder_state_dict'] = self.alg.depth_encoder.state_dict()
             state_dict['depth_actor_state_dict'] = self.alg.depth_actor.state_dict()
         if self.cfg['train_phase3']:
-            state_dict['rgb_encoder_state_dict'] = self.alg.depth_encoder.state_dict()
-            state_dict['rgb_actor_state_dict'] = self.alg.depth_actor.state_dict()
+            state_dict['rgb_encoder_state_dict'] = self.alg.rgb_encoder.state_dict()
+            state_dict['rgb_actor_state_dict'] = self.alg.rgb_actor.state_dict()
         torch.save(state_dict, path)
         wandb.save(path)
 
@@ -805,6 +815,8 @@ class OnPolicyRunner:
                 warnings.warn("'rgb_encoder_state_dict' key does not exist, not loading rgb encoder...")
             else:
                 print("Saved rgb encoder detected, loading...")
+                save_iter = int(path.split('_')[-1].replace('.pt',''))
+                self.resume_num = save_iter
                 self.alg.rgb_encoder.load_state_dict(loaded_dict['rgb_encoder_state_dict'])
             if 'rgb_actor_state_dict' in loaded_dict:
                 print("Saved rgb actor detected, loading...")

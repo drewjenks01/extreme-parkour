@@ -113,6 +113,15 @@ class LeggedRobotCfg(BaseConfig):
         scale = 1
         invert = True
 
+        clip_resized = (224, 224)
+        clip_encoder = False
+
+        dino_encoder = False
+        dino_resized = (84, 56)
+
+        mnet_encoder = False
+        mnet_resized = (128, 128)
+
     class normalization:
         class obs_scales:
             lin_vel = 2.0
@@ -399,6 +408,9 @@ class LeggedRobotCfgPPO(BaseConfig):
         hidden_dims = 512
         learning_rate = 1.e-3
         num_steps_per_env = LeggedRobotCfg.depth.update_interval * 24
+
+        clip_encoder = False
+        dino_encoder = False
 
     class estimator:
         train_with_estimated_states = True

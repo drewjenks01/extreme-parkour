@@ -140,6 +140,13 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             args.resume = True
             args.use_rgb = True
 
+        if args.clip_encoder:
+            # env_cfg.depth.original = env_cfg.depth.clip_resized
+            # env_cfg.depth.resized = env_cfg.depth.clip_resized
+            env_cfg.depth.clip_encoder = True
+        if args.mnet_encoder:
+            env_cfg.depth.mnet_encoder = True
+
         if args.use_camera:
             env_cfg.depth.use_camera = args.use_camera
         if args.use_rgb:
@@ -203,6 +210,10 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
 
         if args.vision_classifier:
             cfg_train.policy.use_classifier = True
+        if args.clip_encoder:
+            cfg_train.depth_encoder.clip_encoder = True
+        if args.mnet_encoder:
+            cfg_train.depth_encoder.mnet_encoder = True
         if 'phase3' in args.exptid:
             cfg_train.runner.train_phase3 = True
 
@@ -256,10 +267,8 @@ def get_args():
         {"name": "--vision_classifier", "action": "store_true", "default": False, "help": "Make vision model and scan encoder a classifier"},
         {"name": "--use_rgb", "action": "store_true", "default": False, "help": "Use RGB images instead of depth"},
         {"name": "--rgb_domain_rand", "action": "store_true", "default": False, "help": "Randomize color, texture, and lighting for RGB images"},
-
-
-
-
+        {"name": "--clip_encoder", "action": "store_true", "default": False, "help": "Use pretrained CLIP vision encoder"},
+        {"name": "--mnet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
     ]
     # parse arguments
     args = parse_arguments(
