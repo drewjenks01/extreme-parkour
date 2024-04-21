@@ -138,10 +138,13 @@ class OnPolicyRunner:
         
         if self.if_depth and not self.if_rgb:
             self.learn = self.learn_vision
+            self.num_learning_iterations = 15000
         elif self.if_rgb:
             self.learn = self.learn_rgb_vision
+            self.num_learning_iterations = 10000
         else:
             self.learn = self.learn_RL
+            self.num_learning_iterations = 15000
             
         # Log
         self.log_dir = log_dir
@@ -158,6 +161,8 @@ class OnPolicyRunner:
     def learn_RL(self, num_learning_iterations, init_at_random_ep_len=False):
         trigger_sync = TriggerWandbSyncHook()
         wandb.watch(self.alg.actor_critic, log=None, log_freq=10)
+
+        num_learning_iterations = self.num_learning_iterations
 
         mean_value_loss = 0.
         mean_surrogate_loss = 0.
@@ -251,13 +256,13 @@ class OnPolicyRunner:
                 self.log(locals())
             if it < 2500:
                 if it % self.save_interval == 0:
-                    self.save( 'model_{}.pt'.format(it))
+                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             elif it < 5000:
                 if it % (2*self.save_interval) == 0:
-                    self.save( 'model_{}.pt'.format(it))
+                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             else:
                 if it % (5*self.save_interval) == 0:
-                    self.save( 'model_{}.pt'.format(it))
+                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             trigger_sync()
             ep_infos.clear()
         
@@ -268,6 +273,8 @@ class OnPolicyRunner:
         trigger_sync = TriggerWandbSyncHook()
         wandb.watch(self.alg.depth_actor, log=None, log_freq=10)
         wandb.watch(self.alg.depth_encoder, log=None, log_freq=10)
+
+        num_learning_iterations = self.num_learning_iterations
     
         tot_iter = self.current_learning_iteration + num_learning_iterations
         self.start_learning_iteration = copy(self.current_learning_iteration)
@@ -377,7 +384,7 @@ class OnPolicyRunner:
             if (it-self.start_learning_iteration < 2500 and it % self.save_interval == 0) or \
                (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
                (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
-                    self.save( 'model_{}.pt'.format(it))
+                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             trigger_sync()
             ep_infos.clear()
 
@@ -385,6 +392,8 @@ class OnPolicyRunner:
         if self.env.cfg.env.wandb_offline:
             trigger_sync = TriggerWandbSyncHook()
             wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
+
+        num_learning_iterations = self.num_learning_iterations
     
         tot_iter = self.current_learning_iteration + num_learning_iterations
         self.start_learning_iteration = copy(self.current_learning_iteration)
@@ -511,7 +520,7 @@ class OnPolicyRunner:
             if (it-self.start_learning_iteration < 2500 and it % self.save_interval == 0) or \
                (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
                (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
-                    self.save( 'model_{}.pt'.format(it))
+                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
             if self.env.cfg.env.wandb_offline:
                 trigger_sync()
             ep_infos.clear()
