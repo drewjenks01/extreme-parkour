@@ -63,6 +63,7 @@ def get_load_path(root, load_run=-1, checkpoint=-1, model_name_include="model"):
     return model, checkpoint
 
 def play(args):
+    args.proj_name = 'final_models'
     if args.web:
         web_viewer = webviewer.WebViewer()
     faulthandler.enable()
@@ -73,7 +74,7 @@ def play(args):
     if args.nodelay:
         env_cfg.domain_rand.action_delay_view = 0
     env_cfg.env.num_envs = 256
-    env_cfg.env.episode_length_s = 30
+    env_cfg.env.episode_length_s = 20
     env_cfg.commands.resampling_time = 60
     env_cfg.terrain.num_rows = 5
     env_cfg.terrain.num_cols = 5
