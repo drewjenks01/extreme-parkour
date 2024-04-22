@@ -59,8 +59,10 @@ def class_to_dict(obj) -> dict:
 
 def train(args):
     #args.headless = True
-    #log_pth = LEGGED_GYM_ROOT_DIR + "/logs/{}/".format(args.proj_name) + args.exptid
-    log_pth = "/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/{}/".format(args.proj_name) + args.exptid
+    if args.supercloud:
+        log_pth = LEGGED_GYM_ROOT_DIR + "/logs/{}/".format(args.proj_name) + args.exptid
+    else:
+        log_pth = "/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/{}/".format(args.proj_name) + args.exptid
     try:
         os.makedirs(log_pth)
     except:
@@ -79,10 +81,15 @@ def train(args):
     env, env_cfg = task_registry.make_env(name=args.task, args=args)    
     ppo_runner, train_cfg = task_registry.make_alg_runner(log_root = log_pth, env=env, name=args.task, args=args)
 
-    env_cfg.env.wandb_offline = False
+    if args.supercloud:
+        mode = 'offline'
+        env_cfg.env.wandb_offline = True
+    else:
+        mode = 'online'
+        env_cfg.env.wandb_offline = False
 
     Cfg = class_to_dict(env_cfg)
-    wandb.init(project="walk-these-ways", name=args.exptid, entity="iai-eipo", group=args.exptid[:3], mode='online', config={'Cfg': Cfg})
+    wandb.init(project="walk-these-ways", name=args.exptid, entity="iai-eipo", group=args.exptid[:3], mode=mode, config={'Cfg': Cfg})
     wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot_config.py", policy="now")
     wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot.py", policy="now")
 
