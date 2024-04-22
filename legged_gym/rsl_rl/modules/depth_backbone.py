@@ -177,24 +177,20 @@ class RGBMobileNetBackbone(nn.Module):
         super().__init__()
         #self.model,_ = clip.load("RN50")
         self.model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True)
-        self.model.classifier = nn.Identity()
-        self.model.eval()
+
+        self.model.classifier = nn.Sequential(
+            nn.Dropout(0.2),  # Add dropout to match mnv2
+            nn.Linear(in_features=1280, out_features=scandots_output_dim),
+        )
 
         for param in self.model.parameters():
             param.requires_grad = False
-
-        activation = nn.ELU()
-        self.latent_compression = nn.Sequential(
-            activation,
-            # MN output -> latent dim
-            nn.Linear(1280, scandots_output_dim)
-        )
+        
+        for param in self.model.classifier.parameters():
+            param.requires_grad = True
 
     def forward(self, images: torch.Tensor):
-        with torch.no_grad():
-            image_features = self.model(images)
-        latent = self.latent_compression(image_features)
-
+        latent = self.model(images)
         return latent
     
 class RGBDinoBackbone(nn.Module):

@@ -159,8 +159,9 @@ class OnPolicyRunner:
         
 
     def learn_RL(self, num_learning_iterations, init_at_random_ep_len=False):
-        trigger_sync = TriggerWandbSyncHook()
-        wandb.watch(self.alg.actor_critic, log=None, log_freq=10)
+        if self.env.cfg.env.wandb_offline:
+            trigger_sync = TriggerWandbSyncHook()
+            wandb.watch(self.alg.actor_critic, log=None, log_freq=10)
 
         num_learning_iterations = self.num_learning_iterations
 
@@ -263,16 +264,18 @@ class OnPolicyRunner:
             else:
                 if it % (5*self.save_interval) == 0:
                     self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
-            trigger_sync()
+            if self.env.cfg.env.wandb_offline:
+                trigger_sync()
             ep_infos.clear()
         
         # self.current_learning_iteration += num_learning_iterations
         self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(self.current_learning_iteration)))
 
     def learn_vision(self, num_learning_iterations, init_at_random_ep_len=False):
-        trigger_sync = TriggerWandbSyncHook()
-        wandb.watch(self.alg.depth_actor, log=None, log_freq=10)
-        wandb.watch(self.alg.depth_encoder, log=None, log_freq=10)
+        if self.env.cfg.env.wandb_offline:
+            trigger_sync = TriggerWandbSyncHook()
+            wandb.watch(self.alg.depth_actor, log=None, log_freq=10)
+            wandb.watch(self.alg.depth_encoder, log=None, log_freq=10)
 
         num_learning_iterations = self.num_learning_iterations
     
@@ -385,7 +388,8 @@ class OnPolicyRunner:
                (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
                (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
                     self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
-            trigger_sync()
+            if self.env.cfg.env.wandb_offline:
+                trigger_sync()
             ep_infos.clear()
 
     def learn_rgb_vision(self, num_learning_iterations, init_at_random_ep_len=False):
@@ -438,8 +442,8 @@ class OnPolicyRunner:
                     depth_yaw = 1.5*depth_latent_and_yaw[:, -2:]
                     
                     depth_latent_buffer.append(depth_latent)
-                    #yaw_buffer_teacher.append(depth_yaw)
-                    yaw_buffer_teacher.append(obs[:, 6:8])
+                    yaw_buffer_teacher.append(depth_yaw)
+                    #yaw_buffer_teacher.append(obs[:, 6:8])
                     
                     # rgb student
                     obs_prop_rgb = obs[:, :self.env.cfg.env.n_proprio].clone()

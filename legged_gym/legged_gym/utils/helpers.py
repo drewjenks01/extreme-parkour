@@ -140,8 +140,11 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             args.resume = True
             args.use_rgb = True
 
-        if args.reindex:
-            env_cfg.env.reindex = True
+        if args.contact_filt:
+            print('Using contact filter')
+            env_cfg.env.contact_filt = True
+            env_cfg.env.n_priv_latent -= 4
+            env_cfg.env.num_observations -= 4
 
         if args.clip_encoder:
             # env_cfg.depth.original = env_cfg.depth.clip_resized
@@ -272,7 +275,7 @@ def get_args():
         {"name": "--rgb_domain_rand", "action": "store_true", "default": False, "help": "Randomize color, texture, and lighting for RGB images"},
         {"name": "--clip_encoder", "action": "store_true", "default": False, "help": "Use pretrained CLIP vision encoder"},
         {"name": "--mnet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
-        {"name": "--reindex", "action": "store_true", "default": False, "help": "Use original reindexing"},
+        {"name": "--contact_filt", "action": "store_true", "default": False, "help": "Use original contact filter"},
     ]
     # parse arguments
     args = parse_arguments(

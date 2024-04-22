@@ -129,8 +129,7 @@ class LeggedRobot(BaseTask):
         Args:
             actions (torch.Tensor): Tensor of shape (num_envs, num_actions_per_env)
         """
-        if self.cfg.env.reindex:
-            actions = self.reindex(actions)
+        # actions = self.reindex(actions)
 
         actions.to(self.device)
         self.action_history_buf = torch.cat([self.action_history_buf[:, 1:].clone(), actions[:, None, :].clone()], dim=1)
@@ -466,23 +465,23 @@ class LeggedRobot(BaseTask):
             self.delta_yaw = self.target_yaw - self.yaw
             self.delta_next_yaw = self.next_target_yaw - self.yaw
 
-        if self.cfg.env.reindex:
+        if self.cfg.env.contact_filt:
             obs_buf = torch.cat((#skill_vector, 
-                            self.base_ang_vel  * self.obs_scales.ang_vel,   #[1,3]
-                            imu_obs,    #[1,2]
-                            0*self.delta_yaw[:, None], 
-                            self.delta_yaw[:, None],
-                            self.delta_next_yaw[:, None],
-                            0*self.commands[:, 0:2], 
-                            self.commands[:, 0:1],  #[1,1]
-                            (self.env_class != 17).float()[:, None], 
-                            (self.env_class == 17).float()[:, None],
-                            self.reindex((self.dof_pos - self.default_dof_pos_all) * self.obs_scales.dof_pos),
-                            self.reindex(self.dof_vel * self.obs_scales.dof_vel),
-                            self.reindex(self.action_history_buf[:, -1]),
-                            0*self.reindex_feet(self.contact_filt.float()-0.5),
-                            ),dim=-1)
-
+                                self.base_ang_vel  * self.obs_scales.ang_vel,   #[1,3]
+                                imu_obs,    #[1,2]
+                                0*self.delta_yaw[:, None], 
+                                self.delta_yaw[:, None],
+                                self.delta_next_yaw[:, None],
+                                0*self.commands[:, 0:2], 
+                                self.commands[:, 0:1],  #[1,1]
+                                (self.env_class != 17).float()[:, None], 
+                                (self.env_class == 17).float()[:, None],
+                                (self.dof_pos - self.default_dof_pos_all) * self.obs_scales.dof_pos,
+                                self.dof_vel * self.obs_scales.dof_vel,
+                                self.action_history_buf[:, -1],
+                                self.contact_filt.float()-0.5,
+                                ),dim=-1)
+            
         else:
             obs_buf = torch.cat((#skill_vector, 
                                 self.base_ang_vel  * self.obs_scales.ang_vel,   #[1,3]
@@ -503,14 +502,14 @@ class LeggedRobot(BaseTask):
                                    0 * self.base_lin_vel,
                                    0 * self.base_lin_vel), dim=-1)
         
-        if self.cfg.env.reindex:
+        if self.cfg.env.contact_filt:
             priv_latent = torch.cat((
                 self.mass_params_tensor,
                 self.friction_coeffs_tensor,
                 self.motor_strength[0] - 1, 
-                self.motor_strength[1] - 1,
-                self.reindex_feet(self.contact_filt.float()-0.5)
-            ), dim=-1)
+                self.motor_strength[1] - 1
+                ), dim=-1)
+            
         else:
             priv_latent = torch.cat((
                 self.mass_params_tensor,
