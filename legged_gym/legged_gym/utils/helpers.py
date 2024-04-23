@@ -140,6 +140,10 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             args.resume = True
             args.use_rgb = True
 
+            if args.bigger_image:
+                env_cfg.depth.original = (128, 75)
+                env_cfg.depth.rgb_resized = (109, 73)
+
         if args.contact_filt:
             print('Using contact filter')
             env_cfg.env.contact_filt = True
@@ -277,6 +281,7 @@ def get_args():
         {"name": "--mnet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
         {"name": "--contact_filt", "action": "store_true", "default": False, "help": "Use original contact filter"},
         {"name": "--supercloud", "action": "store_true", "default": False, "help": "Use supercloud compute"},
+        {"name": "--bigger_image", "action": "store_true", "default": False, "help": "Use bigger rgb images"},
     ]
     # parse arguments
     args = parse_arguments(

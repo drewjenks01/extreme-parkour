@@ -114,6 +114,8 @@ class LeggedRobotCfg(BaseConfig):
         scale = 1
         invert = True
 
+        rgb_resized = (87, 58)
+
         clip_resized = (224, 224)
         clip_encoder = False
 

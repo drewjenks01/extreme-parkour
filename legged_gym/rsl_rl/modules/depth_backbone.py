@@ -118,7 +118,10 @@ class RGBOnlyFCBackbone58x87(nn.Module):
             activation,
             nn.Flatten(),
             # [32, 25, 39]
-            nn.Linear(64 * 25 * 39, 128),
+
+            # 62, 400
+            #nn.Linear(64 * 25 * 39, 128),
+            nn.Linear(102400, 128),
             activation,
             nn.Linear(128, scandots_output_dim)
         )

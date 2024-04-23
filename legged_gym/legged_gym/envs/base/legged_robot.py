@@ -108,6 +108,9 @@ class LeggedRobot(BaseTask):
         
         self.resize_transform = torchvision.transforms.Resize((self.cfg.depth.resized[1], self.cfg.depth.resized[0]), 
                                                                 interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
+
+        self.rgb_resize_transform = torchvision.transforms.Resize((self.cfg.depth.rgb_resized[1], self.cfg.depth.rgb_resized[0]), 
+                                                                interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
         
         
         if not self.headless:
@@ -196,7 +199,7 @@ class LeggedRobot(BaseTask):
             #print(rgb_image.shape, rgb_image)
             #rgb_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
             #rgb_image = torch.clip(rgb_image, -self.cfg.depth.far_clip, -self.cfg.depth.near_clip)
-            rgb_image = self.resize_transform(rgb_image[None, :]).squeeze()
+            rgb_image = self.rgb_resize_transform(rgb_image[None, :]).squeeze()
             rgb_image = rgb_image / 255.0
             #rgb_image = self.normalize_depth_image(rgb_image)
         return rgb_image
@@ -941,8 +944,8 @@ class LeggedRobot(BaseTask):
                     self.rgb_buffer = torch.zeros(self.num_envs,  
                                                     self.cfg.depth.buffer_len, 
                                                     3,
-                                                    self.cfg.depth.resized[1], 
-                                                    self.cfg.depth.resized[0]).to(self.device)
+                                                    self.cfg.depth.rgb_resized[1], 
+                                                    self.cfg.depth.rgb_resized[0]).to(self.device)
                 
 
 
