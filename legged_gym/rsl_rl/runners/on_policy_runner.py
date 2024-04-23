@@ -141,7 +141,7 @@ class OnPolicyRunner:
             self.num_learning_iterations = 15000
         elif self.if_rgb:
             self.learn = self.learn_rgb_vision
-            self.num_learning_iterations = 15000
+            self.num_learning_iterations = 20001
         else:
             self.learn = self.learn_RL
             self.num_learning_iterations = 15000
