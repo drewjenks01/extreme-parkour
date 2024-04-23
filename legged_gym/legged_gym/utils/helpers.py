@@ -276,6 +276,7 @@ def get_args():
         {"name": "--clip_encoder", "action": "store_true", "default": False, "help": "Use pretrained CLIP vision encoder"},
         {"name": "--mnet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
         {"name": "--contact_filt", "action": "store_true", "default": False, "help": "Use original contact filter"},
+        {"name": "--supercloud", "action": "store_true", "default": False, "help": "Use supercloud compute"},
     ]
     # parse arguments
     args = parse_arguments(
