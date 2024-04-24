@@ -120,8 +120,51 @@ class RGBOnlyFCBackbone58x87(nn.Module):
             # [32, 25, 39]
 
             # 62, 400
-            #nn.Linear(64 * 25 * 39, 128),
-            nn.Linear(102400, 128),
+            nn.Linear(64 * 25 * 39, 128),
+            #nn.Linear(102400, 128),
+            activation,
+            nn.Linear(128, scandots_output_dim)
+        )
+
+        if output_activation == "tanh":
+            self.output_activation = nn.Tanh()
+        else:
+            self.output_activation = activation
+
+    def forward(self, images: torch.Tensor):
+        images_compressed = self.image_compression(images)
+        latent = self.output_activation(images_compressed)
+
+        return latent
+
+class RGBLargeFCBackbone58x87(nn.Module):
+    def __init__(self, prop_dim, scandots_output_dim, hidden_state_dim, output_activation=None, num_frames=3):
+        super().__init__()
+
+        self.num_frames = num_frames
+        activation = nn.ELU()
+        self.image_compression = nn.Sequential(
+            # [3, 224, 224]
+            nn.Conv2d(in_channels=self.num_frames, out_channels=32, kernel_size=3),
+            # [32, 222, 222]
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            # [32, 111, 111]
+            activation,
+            nn.Conv2d(in_channels=32, out_channels=32, kernel_size=5),
+            # [32, 107, 107]
+            nn.MaxPool2d(kernel_size=2, stride=2),
+            # [32, 53, 53]
+            activation,
+            nn.Conv2d(in_channels=64, out_channels=64, kernel_size=5),
+            # [64, 49, 49]
+            activation,
+            nn.Flatten(),
+            # [32, 25, 39]
+            # [64, 49, 49]
+
+            # 62, 400
+            nn.Linear(64 * 49 * 49, 128),
+            #nn.Linear(102400, 128),
             activation,
             nn.Linear(128, scandots_output_dim)
         )

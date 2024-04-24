@@ -109,8 +109,16 @@ class LeggedRobot(BaseTask):
         self.resize_transform = torchvision.transforms.Resize((self.cfg.depth.resized[1], self.cfg.depth.resized[0]), 
                                                                 interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
 
-        self.rgb_resize_transform = torchvision.transforms.Resize((self.cfg.depth.rgb_resized[1], self.cfg.depth.rgb_resized[0]), 
-                                                                interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
+        
+        if self.cfg.depth.big_encoder:
+            self.rgb_resize_transform = torchvision.transforms.Compose([
+                torchvision.transforms.Resize((self.cfg.depth.rgb_resized[1], self.cfg.depth.rgb_resized[0]), 
+                                                                    interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
+                CenterCrop(224)
+            ])
+        else:
+            self.rgb_resize_transform = torchvision.transforms.Resize((self.cfg.depth.rgb_resized[1], self.cfg.depth.rgb_resized[0]), 
+                                                                    interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
         
         
         if not self.headless:

@@ -100,6 +100,10 @@ class OnPolicyRunner:
             elif self.depth_encoder_cfg['mnet_encoder']:
                 print('Using pretrained MobileNetV2 encoder')
                 rgb_backbone = RGBMobileNetBackbone(self.policy_cfg["scan_encoder_dims"][-1])
+            
+            elif self.depth_encoder_cfg['big_encoder']:
+                print('Using large rgb encoder')
+                rgb_backbone = RGBLargeFCBackbone58x87(self.policy_cfg["scan_encoder_dims"][-1])
             else:
                 rgb_backbone = RGBOnlyFCBackbone58x87(env.cfg.env.n_proprio, 
                                                         self.policy_cfg["scan_encoder_dims"][-1], 

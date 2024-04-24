@@ -125,6 +125,8 @@ class LeggedRobotCfg(BaseConfig):
         mnet_encoder = False
         mnet_resized = (128, 128)
 
+        big_encoder = False
+
     class normalization:
         class obs_scales:
             lin_vel = 2.0
@@ -415,6 +417,7 @@ class LeggedRobotCfgPPO(BaseConfig):
         clip_encoder = False
         dino_encoder = False
         mnet_encoder = False
+        big_encoder = False
 
     class estimator:
         train_with_estimated_states = True

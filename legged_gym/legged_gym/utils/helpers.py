@@ -141,8 +141,9 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             args.use_rgb = True
 
             if args.bigger_image:
-                env_cfg.depth.original = (128, 75)
-                env_cfg.depth.rgb_resized = (109, 73)
+                env_cfg.depth.original = (640, 480)
+                env_cfg.depth.rgb_resized = (256, 256)
+                env_cfg.depth.big_encoder = True
 
         if args.contact_filt:
             print('Using contact filter')
@@ -226,6 +227,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.depth_encoder.mnet_encoder = True
         if 'phase3' in args.exptid:
             cfg_train.runner.train_phase3 = True
+        if args.bigger_image:
+            cfg_train.depth_encoder.big_encoder = True
 
     return env_cfg, cfg_train
 
