@@ -207,6 +207,10 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
         if not args.delay and not args.resume and not args.use_camera and args.headless: # if train from scratch
             env_cfg.domain_rand.action_delay = True
             env_cfg.domain_rand.action_curr_step = env_cfg.domain_rand.action_curr_step_scratch
+
+        if args.debug:
+            env_cfg.terrain.num_cols = 8
+            env_cfg.env.num_envs = 8
     if cfg_train is not None:
         if args.seed is not None:
             cfg_train.seed = args.seed

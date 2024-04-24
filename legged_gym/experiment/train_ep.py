@@ -89,6 +89,9 @@ def train(args):
         mode = 'online'
         env_cfg.env.wandb_offline = False
 
+    if args.debug:
+        mode = "disabled"
+
     Cfg = class_to_dict(env_cfg)
     wandb.init(project="walk-these-ways", name=args.exptid, entity="iai-eipo", group=args.exptid[:3], mode=mode, config={'Cfg': Cfg})
     wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot_config.py", policy="now")

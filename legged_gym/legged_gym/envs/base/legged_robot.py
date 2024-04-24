@@ -49,6 +49,7 @@ from legged_gym.utils.helpers import class_to_dict
 from scipy.spatial.transform import Rotation as R
 import wandb
 from .legged_robot_config import LeggedRobotCfg
+from legged_gym.experiment.mesh_generation.generate_mesh import generate_rectangular_prism
 
 from tqdm import tqdm
 import cv2
@@ -1150,7 +1151,24 @@ class LeggedRobot(BaseTask):
         if self.cfg.domain_rand.randomize_ground_texture:
             options = gymapi.AssetOptions()
             options.fix_base_link = True
-            urdf_root = '/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/whole_map'
+            H = 1.5
+            nh = 6
+            filename =  LEGGED_GYM_ROOT_DIR+"/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/rectangular_prism_bumps.obj"
+
+            terrain_heights = self.terrain.height_field_raw * self.cfg.terrain.vertical_scale
+            nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
+            W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length
+
+            # generate the full map
+            # seal the edges
+            terrain_heights[:, 0] = 0
+            terrain_heights[:, -1] = 0
+            terrain_heights[0, :] = 0
+            terrain_heights[-1, :] = 0
+
+            generate_rectangular_prism(L, W, H, nl, nw, nh, terrain_heights, filename)
+
+            urdf_root = LEGGED_GYM_ROOT_DIR+'/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/whole_map'
             loaded_asset = self.gym.load_asset(self.sim, urdf_root, 'rectangular_prism_bumps.urdf', options)
 
         print("Creating env...")

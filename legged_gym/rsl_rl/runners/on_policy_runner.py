@@ -115,10 +115,7 @@ class OnPolicyRunner:
             rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg).to(self.device)
             
             
-            if self.cfg['phase3_together']:
-                rgb_actor = depth_actor
-            else:
-                rgb_actor = deepcopy(actor_critic.actor)
+            rgb_actor = deepcopy(actor_critic.actor)
         else:
             rgb_encoder = None
             rgb_actor = None
