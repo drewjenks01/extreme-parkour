@@ -133,17 +133,18 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             args.delay = True
             args.use_camera = True
             args.resume = True
-        elif 'phase3' in args.exptid:
-            print('Using phase3 settings')
-            args.delay = True
-            args.use_camera = True
-            args.resume = True
-            args.use_rgb = True
 
-            if args.bigger_image:
-                env_cfg.depth.original = (640, 480)
-                env_cfg.depth.rgb_resized = (256, 256)
-                env_cfg.depth.big_encoder = True
+        # elif 'phase3' in args.exptid:
+        #     print('Using phase3 settings')
+        #     args.delay = True
+        #     args.use_camera = True
+        #     args.resume = True
+        #     args.use_rgb = True
+
+        #     if args.bigger_image:
+        #         env_cfg.depth.original = (640, 480)
+        #         env_cfg.depth.rgb_resized = (256, 256)
+        #         env_cfg.depth.big_encoder = True
 
         if args.contact_filt:
             print('Using contact filter')
@@ -160,8 +161,15 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
 
         if args.use_camera:
             env_cfg.depth.use_camera = args.use_camera
-        if args.use_rgb:
-            env_cfg.depth.use_rgb = args.use_rgb
+            if args.use_rgb:
+                env_cfg.depth.use_rgb = args.use_rgb
+            if args.use_depth:
+                env_cfg.depth.use_depth = args.use_depth
+
+            if not args.use_rgb and not args.ue_depth:
+                raise Exception('Using camera but didnt specify image type')
+
+
         if args.rgb_domain_rand:
             print('Using RGB domain randomization')
             env_cfg.domain_rand.randomize_lighting = True
@@ -204,7 +212,9 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.seed = args.seed
         # alg runner parameters
         if args.use_camera:
-            cfg_train.depth_encoder.if_depth = args.use_camera
+            cfg_train.depth_encoder.if_depth = not args.use_rgb
+            cfg_train.depth_encoder.if_rgb = args.use_rgb
+
         if args.max_iterations is not None:
             cfg_train.runner.max_iterations = args.max_iterations
         if args.resume:
@@ -279,6 +289,7 @@ def get_args():
         {"name": "--both_phases", "action": "store_true", "default": False, "help": "Trains both phases back to back"},
         {"name": "--vision_classifier", "action": "store_true", "default": False, "help": "Make vision model and scan encoder a classifier"},
         {"name": "--use_rgb", "action": "store_true", "default": False, "help": "Use RGB images instead of depth"},
+        {"name": "--use_depth", "action": "store_true", "default": False, "help": "Use depth images instead of RGB"},
         {"name": "--rgb_domain_rand", "action": "store_true", "default": False, "help": "Randomize color, texture, and lighting for RGB images"},
         {"name": "--clip_encoder", "action": "store_true", "default": False, "help": "Use pretrained CLIP vision encoder"},
         {"name": "--mnet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},

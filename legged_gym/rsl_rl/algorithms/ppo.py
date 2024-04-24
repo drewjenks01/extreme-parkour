@@ -136,6 +136,7 @@ class PPO:
             self.rgb_encoder = rgb_encoder
             self.rgb_encoder_optimizer = optim.Adam(self.rgb_encoder.parameters(), lr=depth_encoder_paras["learning_rate"])
             self.rgb_actor = rgb_actor
+            self.depth_actor_optimizer = optim.Adam([*self.rgb_actor.parameters(), *self.rgb_encoder.parameters()], lr=depth_encoder_paras["learning_rate"])
 
 
     def init_storage(self, num_envs, num_transitions_per_env, actor_obs_shape, critic_obs_shape, action_shape):
@@ -344,6 +345,21 @@ class PPO:
             nn.utils.clip_grad_norm_(self.depth_encoder.parameters(), self.max_grad_norm)
             self.depth_encoder_optimizer.step()
             return depth_encoder_loss.item()
+
+    def update_both_encoders(self, depth_latent_batch, rgb_latent_batch):
+        if self.if_depth:
+            dual_encoder_loss = (rgb_latent_batch - depth_latent_batch).norm(p=2, dim=1).mean()
+
+            self.rgb_encoder.zero_grad()
+            self.depth_encoder.zero_grad()
+
+            dual_encoder_loss.backward()
+
+            nn.utils.clip_grad_norm_([self.depth_encoder.parameters(), self.rgb_encoder.parameters()], self.max_grad_norm)
+            self.depth_encoder_optimizer.step()
+            self.rgb_encoder_optimizer.step()
+            
+            return dual_encoder_loss.item()
     
     def update_depth_actor(self, actions_student_batch, actions_teacher_batch, yaw_student_batch, yaw_teacher_batch):
         if self.if_depth:
@@ -357,6 +373,19 @@ class PPO:
             nn.utils.clip_grad_norm_(self.depth_actor.parameters(), self.max_grad_norm)
             self.depth_actor_optimizer.step()
             return depth_actor_loss.item(), yaw_loss.item()
+        
+    def update_rgb_actor(self, actions_student_batch, actions_teacher_batch, yaw_student_batch, yaw_teacher_batch):
+        if self.train_phase3:
+            rgb_actor_loss = (actions_teacher_batch.detach() - actions_student_batch).norm(p=2, dim=1).mean()
+            yaw_loss = (yaw_teacher_batch.detach() - yaw_student_batch).norm(p=2, dim=1).mean()
+
+            loss = rgb_actor_loss + yaw_loss
+
+            self.rgb_actor_optimizer.zero_grad()
+            loss.backward()
+            nn.utils.clip_grad_norm_(self.rgb_actor.parameters(), self.max_grad_norm)
+            self.rgb_actor_optimizer.step()
+            return rgb_actor_loss.item(), yaw_loss.item()
     
     def update_depth_both(self, depth_latent_batch, scandots_latent_batch, actions_student_batch, actions_teacher_batch):
         if self.if_depth:

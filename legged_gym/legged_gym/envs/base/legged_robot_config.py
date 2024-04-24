@@ -93,6 +93,8 @@ class LeggedRobotCfg(BaseConfig):
     class depth:
         use_camera = False
         use_rgb = False
+        use_depth = False
+
         camera_num_envs = 192
         camera_terrain_num_rows = 10
         camera_terrain_num_cols = 20
@@ -161,7 +163,7 @@ class LeggedRobotCfg(BaseConfig):
         horizontal_scale = 0.05 # [m] influence computation time by a lot
         horizontal_scale_camera = 0.1
         vertical_scale = 0.005 # [m]
-        border_size = 5 # [m]
+        border_size = 0 # [m]
         height = [0.02, 0.06]
         simplify_grid = False
         gap_size = [0.02, 0.1]
@@ -407,7 +409,8 @@ class LeggedRobotCfgPPO(BaseConfig):
         priv_reg_coef_schedual_resume = [0, 0.1, 0, 1]
     
     class depth_encoder:
-        if_depth = LeggedRobotCfg.depth.use_camera
+        if_depth = False
+        if_rgb = False
         depth_shape = LeggedRobotCfg.depth.resized
         buffer_len = LeggedRobotCfg.depth.buffer_len
         hidden_dims = 512

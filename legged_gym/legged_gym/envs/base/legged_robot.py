@@ -173,11 +173,14 @@ class LeggedRobot(BaseTask):
             self.privileged_obs_buf = torch.clip(self.privileged_obs_buf, -clip_obs, clip_obs)
         self.extras["delta_yaw_ok"] = self.delta_yaw < 0.6
         if self.cfg.depth.use_camera and self.global_counter % self.cfg.depth.update_interval == 0:
-            self.extras["depth"] = self.depth_buffer[:, -2]  # have already selected last one
+            if self.cfg.depth.use_depth:
+                self.extras["depth"] = self.depth_buffer[:, -2]  # have already selected last one
+            
             if self.cfg.depth.use_rgb:
-                self.extras["rgb"] = self.rgb_buffer[:, -2]
+                self.extras["rgb"] = self.rgb_buffer[:, -2].squeeze(1)
         else:
-            self.extras["depth"] = None
+            if self.cfg.depth.use_depth:
+                self.extras["depth"] = None
 
             if self.cfg.depth.use_rgb:
                 self.extras["rgb"] = None
@@ -236,7 +239,8 @@ class LeggedRobot(BaseTask):
         self.gym.render_all_camera_sensors(self.sim)
         self.gym.start_access_image_tensors(self.sim)
 
-        self.update_depth_buffer()
+        if self.cfg.depth.use_depth:
+            self.update_depth_buffer()
 
         if self.cfg.depth.use_rgb:
             self.update_rgb_buffer()
@@ -685,6 +689,9 @@ class LeggedRobot(BaseTask):
         if self.cfg.domain_rand.randomize_lighting:
             self._randomize_lighting()
 
+        if self.cfg.domain_rand.randomize_ground_texture:
+            self._randomize_ground_texture()
+
     def _randomize_lighting(self):
         intensity = np.random.uniform(0.2, 0.8)
         intensity = gymapi.Vec3(intensity, intensity, intensity)
@@ -694,6 +701,12 @@ class LeggedRobot(BaseTask):
         direction[2] = 1.0
         direction = gymapi.Vec3(direction[0], direction[1], direction[2])
         self.gym.set_light_parameters(self.sim, 0, intensity, ambient, direction)
+
+    def _randomize_ground_texture(self):
+
+        for env_handle, ground_handle in zip(self.envs, self.ground_handles):
+            rand_texture = np.random.randint(0, len(self.textures))
+            self.gym.set_rigid_body_texture(env_handle, ground_handle, 0, gymapi.MeshType.MESH_VISUAL, self.textures[rand_texture])
         
     def _gather_cur_goals(self, future=0):
         return self.env_goals.gather(1, (self.cur_goal_idx[:, None, None]+future).expand(-1, -1, self.env_goals.shape[-1])).squeeze(1)
@@ -928,10 +941,11 @@ class LeggedRobot(BaseTask):
             self.height_update_interval = int(self.cfg.env.height_update_dt / (self.cfg.sim.dt * self.cfg.control.decimation))
 
         if self.cfg.depth.use_camera:
-            self.depth_buffer = torch.zeros(self.num_envs,  
-                                            self.cfg.depth.buffer_len, 
-                                            self.cfg.depth.resized[1], 
-                                            self.cfg.depth.resized[0]).to(self.device)
+            if self.cfg.depth.use_depth:
+                self.depth_buffer = torch.zeros(self.num_envs,  
+                                                self.cfg.depth.buffer_len, 
+                                                self.cfg.depth.resized[1], 
+                                                self.cfg.depth.resized[0]).to(self.device)
             
             if self.cfg.depth.use_rgb:
                 if self.cfg.depth.clip_encoder or self.cfg.depth.mnet_encoder:
@@ -1071,9 +1085,10 @@ class LeggedRobot(BaseTask):
 
         if self.cfg.domain_rand.randomize_ground_texture:
             texture_path = LEGGED_GYM_ROOT_DIR + "/resources/textures/"
-            texture_files = ['tiled_snow.jpg', 'tiled_pebble_stone_texture_nature.jpg', 'tiled_grass.jpg', 'tiled_brick_texture.jpg']
+            texture_files = os.listdir(texture_path)
+            print(f'# textures: {len(texture_files)}')
             texture_paths = [texture_path + f for f in texture_files]
-            textures = [self.gym.create_texture_from_file(self.sim, texture_path) for texture_path in texture_paths]
+            self.textures = [self.gym.create_texture_from_file(self.sim, texture_path) for texture_path in texture_paths]
 
         asset_options = gymapi.AssetOptions()
         asset_options.default_dof_drive_mode = self.cfg.asset.default_dof_drive_mode
@@ -1127,6 +1142,7 @@ class LeggedRobot(BaseTask):
         self.actor_handles = []
         self.robot_actor_idxs = []
         self.envs = []
+        self.ground_handles = []
         self.cam_handles = []
         self.cam_tensors = []
         self.mass_params_tensor = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
@@ -1168,8 +1184,10 @@ class LeggedRobot(BaseTask):
                 rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
                 self.gym.set_asset_rigid_shape_properties(loaded_asset, rigid_shape_props)
                 ground_handle = self.gym.create_actor(env_handle, loaded_asset, start_pose, "ground", -1, 0, 0)
+                self.ground_handles.append(ground_handle)
                 #self.gym.set_rigid_body_color(env_handle, ground_handle, 0, gymapi.MESH_VISUAL, gymapi.Vec3(0.5, 0.5, 0.5))
-                self.gym.set_rigid_body_texture(env_handle, ground_handle, 0, gymapi.MeshType.MESH_VISUAL, textures[i%4])
+                rand_texture = np.random.randint(0, len(self.textures))
+                self.gym.set_rigid_body_texture(env_handle, ground_handle, 0, gymapi.MeshType.MESH_VISUAL, self.textures[rand_texture])
 
             self.envs.append(env_handle)
             self.actor_handles.append(anymal_handle)

@@ -80,8 +80,9 @@ class OnPolicyRunner:
         estimator = Estimator(input_dim=env.cfg.env.n_proprio, output_dim=env.cfg.env.n_priv, hidden_dims=self.estimator_cfg["hidden_dims"]).to(self.device)
         # Depth encoder
         self.if_depth = self.depth_encoder_cfg["if_depth"]
-        self.if_rgb = self.cfg['train_phase3']
+        self.if_rgb = self.depth_encoder_cfg["if_rgb"]
         if self.if_depth:
+            print('Using depth')
             depth_backbone = DepthOnlyFCBackbone58x87(env.cfg.env.n_proprio, 
                                                     self.policy_cfg["scan_encoder_dims"][-1], 
                                                     self.depth_encoder_cfg["hidden_dims"],
@@ -93,7 +94,8 @@ class OnPolicyRunner:
             depth_actor = None
 
         
-        if self.cfg['train_phase3']:
+        if self.if_rgb:
+            print('Using RGB')
             if self.depth_encoder_cfg['clip_encoder']:
                 print('Using pretrained CLIP encoder')
                 rgb_backbone = RGBClipBackbone(self.policy_cfg["scan_encoder_dims"][-1])
@@ -111,7 +113,12 @@ class OnPolicyRunner:
                                                         num_frames=3
                                                         )
             rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg).to(self.device)
-            rgb_actor = deepcopy(actor_critic.actor)
+            
+            
+            if self.cfg['phase3_together']:
+                rgb_actor = depth_actor
+            else:
+                rgb_actor = deepcopy(actor_critic.actor)
         else:
             rgb_encoder = None
             rgb_actor = None
@@ -397,6 +404,272 @@ class OnPolicyRunner:
             ep_infos.clear()
 
     def learn_rgb_vision(self, num_learning_iterations, init_at_random_ep_len=False):
+        print('Learning phase 2 RGB')
+        if self.env.cfg.env.wandb_offline:
+            trigger_sync = TriggerWandbSyncHook()
+            wandb.watch(self.alg.rgb_actor, log=None, log_freq=10)
+            wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
+
+        num_learning_iterations = self.num_learning_iterations
+    
+        tot_iter = self.current_learning_iteration + num_learning_iterations
+        self.start_learning_iteration = copy(self.current_learning_iteration)
+
+        ep_infos = []
+        rewbuffer = deque(maxlen=100)
+        lenbuffer = deque(maxlen=100)
+        num_waypoints_buffer = deque(maxlen=100)
+        cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+        cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+
+        obs = self.env.get_observations()
+        infos = {}
+        infos["rgb"] = self.env.rgb_buffer.clone().to(self.device)[:, -1] if self.if_rgb else None
+        infos["delta_yaw_ok"] = torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
+        self.alg.rgb_encoder.train()
+        self.alg.rgb_actor.train()
+
+        num_pretrain_iter = 0
+        for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
+            start = time.time()
+            rgb_latent_buffer = []
+            scandots_latent_buffer = []
+            actions_teacher_buffer = []
+            actions_student_buffer = []
+            yaw_buffer_student = []
+            yaw_buffer_teacher = []
+            delta_yaw_ok_buffer = []
+            for i in range(self.depth_encoder_cfg["num_steps_per_env"]):
+                if infos["rgb"] != None:
+                    with torch.no_grad():
+                        scandots_latent = self.alg.actor_critic.actor.infer_scandots_latent(obs)
+                    scandots_latent_buffer.append(scandots_latent)
+                    obs_prop_rgb = obs[:, :self.env.cfg.env.n_proprio].clone()
+                    obs_prop_rgb[:, 6:8] = 0
+                    rgb_latent_and_yaw = self.alg.rgb_encoder(infos["rgb"].clone(), obs_prop_rgb)  # clone is crucial to avoid in-place operation
+                    
+                    rgb_latent = rgb_latent_and_yaw[:, :-2]
+                    yaw = 1.5*rgb_latent_and_yaw[:, -2:]
+                    
+                    rgb_latent_buffer.append(rgb_latent)
+                    yaw_buffer_student.append(yaw)
+                    yaw_buffer_teacher.append(obs[:, 6:8])
+                
+                with torch.no_grad():
+                    actions_teacher = self.alg.actor_critic.act_inference(obs, hist_encoding=True, scandots_latent=None)
+                    actions_teacher_buffer.append(actions_teacher)
+
+                obs_student = obs.clone()
+                # obs_student[:, 6:8] = yaw.detach()
+                obs_student[infos["delta_yaw_ok"], 6:8] = yaw.detach()[infos["delta_yaw_ok"]]
+                delta_yaw_ok_buffer.append(torch.nonzero(infos["delta_yaw_ok"]).size(0) / infos["delta_yaw_ok"].numel())
+                actions_student = self.alg.rgb_actor(obs_student, hist_encoding=True, scandots_latent=rgb_latent)
+                actions_student_buffer.append(actions_student)
+
+                # detach actions before feeding the env
+                cur_goal_idx = self.env.cur_goal_idx.clone()
+                if it < num_pretrain_iter:
+                    obs, privileged_obs, rewards, dones, infos = self.env.step(actions_teacher.detach())  # obs has changed to next_obs !! if done obs has been reset
+                else:
+                    obs, privileged_obs, rewards, dones, infos = self.env.step(actions_student.detach())  # obs has changed to next_obs !! if done obs has been reset
+                critic_obs = privileged_obs if privileged_obs is not None else obs
+                obs, critic_obs, rewards, dones = obs.to(self.device), critic_obs.to(self.device), rewards.to(self.device), dones.to(self.device)
+
+                if self.log_dir is not None:
+                        # Book keeping
+                        if 'episode' in infos:
+                            ep_infos.append(infos['episode'])
+                        cur_reward_sum += rewards
+                        cur_episode_length += 1
+                        new_ids = (dones > 0).nonzero(as_tuple=False)
+                        rewbuffer.extend(cur_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                        lenbuffer.extend(cur_episode_length[new_ids][:, 0].cpu().numpy().tolist())
+                        num_waypoints_buffer.extend(cur_goal_idx[new_ids][:,0].cpu().numpy().tolist())
+                        cur_reward_sum[new_ids] = 0
+                        cur_episode_length[new_ids] = 0
+                
+
+            stop = time.time()
+            collection_time = stop - start
+            start = stop
+
+            delta_yaw_ok_percentage = sum(delta_yaw_ok_buffer) / len(delta_yaw_ok_buffer)
+            scandots_latent_buffer = torch.cat(scandots_latent_buffer, dim=0)
+            rgb_latent_buffer = torch.cat(rgb_latent_buffer, dim=0)
+            depth_encoder_loss = 0
+            depth_actor_loss = 0
+            # depth_encoder_loss = self.alg.update_depth_encoder(depth_latent_buffer, scandots_latent_buffer)
+
+            actions_teacher_buffer = torch.cat(actions_teacher_buffer, dim=0)
+            actions_student_buffer = torch.cat(actions_student_buffer, dim=0)
+            yaw_buffer_student = torch.cat(yaw_buffer_student, dim=0)
+            yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
+            rgb_actor_loss, yaw_loss = self.alg.update_depth_actor(actions_student_buffer, actions_teacher_buffer, yaw_buffer_student, yaw_buffer_teacher)
+
+            # depth_encoder_loss, depth_actor_loss = self.alg.update_depth_both(depth_latent_buffer, scandots_latent_buffer, actions_student_buffer, actions_teacher_buffer)
+            stop = time.time()
+            learn_time = stop - start
+
+            self.alg.rgb_encoder.detach_hidden_states()
+
+            if self.save_video_interval:
+                self.log_video(it)
+            if self.log_dir is not None:
+                self.log_vision(locals())
+            if (it-self.start_learning_iteration < 2500 and it % self.save_interval == 0) or \
+               (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
+               (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
+                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+            if self.env.cfg.env.wandb_offline:
+                trigger_sync()
+            ep_infos.clear()
+
+    def learn_rgb_depth_together_vision(self, num_learning_iterations, init_at_random_ep_len=False):
+        if self.env.cfg.env.wandb_offline:
+            trigger_sync = TriggerWandbSyncHook()
+            wandb.watch(self.alg.depth_actor, log=None, log_freq=10)
+            wandb.watch(self.alg.depth_encoder, log=None, log_freq=10)
+
+        num_learning_iterations = self.num_learning_iterations
+    
+        tot_iter = self.current_learning_iteration + num_learning_iterations
+        self.start_learning_iteration = copy(self.current_learning_iteration)
+
+        ep_infos = []
+        rewbuffer = deque(maxlen=100)
+        lenbuffer = deque(maxlen=100)
+        num_waypoints_buffer = deque(maxlen=100)
+        cur_reward_sum = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+        cur_episode_length = torch.zeros(self.env.num_envs, dtype=torch.float, device=self.device)
+
+        obs = self.env.get_observations()
+        infos = {}
+        infos["depth"] = self.env.depth_buffer.clone().to(self.device)[:, -1] if self.if_depth else None
+        infos["rgb"] = self.env.rgb_buffer.clone().to(self.device)[:, -1] if self.if_depth else None
+        infos["delta_yaw_ok"] = torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
+        self.alg.depth_encoder.train()
+        self.alg.rgb_encoder.train()
+        self.alg.depth_actor.train()
+
+        num_pretrain_iter = 0
+        depth_saved=False
+        for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
+            start = time.time()
+            depth_latent_buffer = []
+            rgb_latent_buffer = []
+            scandots_latent_buffer = []
+            actions_teacher_buffer = []
+            actions_student_buffer = []
+            yaw_buffer_student = []
+            yaw_buffer_teacher = []
+            delta_yaw_ok_buffer = []
+
+            train_type = 'depth' if it%2==0 else 'rgb'
+
+            for i in range(self.depth_encoder_cfg["num_steps_per_env"]):
+
+                if infos[train_type]:
+                    with torch.no_grad():
+                        scandots_latent = self.alg.actor_critic.actor.infer_scandots_latent(obs)
+                    scandots_latent_buffer.append(scandots_latent)
+
+                    obs_prop_depth = obs[:, :self.env.cfg.env.n_proprio].clone()
+                    obs_prop_depth[:, 6:8] = 0
+                    depth_latent_and_yaw = self.alg.depth_encoder(infos["depth"].clone(), obs_prop_depth)  # clone is crucial to avoid in-place operation
+                    
+                    depth_latent = depth_latent_and_yaw[:, :-2]
+                    depth_yaw = 1.5*depth_latent_and_yaw[:, -2:]
+
+                    obs_prop_rgb = obs[:, :self.env.cfg.env.n_proprio].clone()
+                    obs_prop_rgb[:, 6:8] = 0
+                    rgb_latent_and_yaw = self.alg.depth_encoder(infos["rgb"].clone(), obs_prop_rgb)  # clone is crucial to avoid in-place operation
+                    
+                    rgb_latent = rgb_latent_and_yaw[:, :-2]
+                    rgb_yaw = 1.5*rgb_latent_and_yaw[:, -2:]
+                    
+                    depth_latent_buffer.append(depth_latent)
+                    rgb_latent_buffer.append(rgb_latent)
+
+                    if train_type == 'depth':
+                        yaw = depth_yaw
+                    elif train_type == 'rgb':
+                        yaw = rgb_yaw
+
+                    yaw_buffer_student.append(yaw)
+                    yaw_buffer_teacher.append(obs[:, 6:8])
+                
+                with torch.no_grad():
+                    actions_teacher = self.alg.actor_critic.act_inference(obs, hist_encoding=True, scandots_latent=None)
+                    actions_teacher_buffer.append(actions_teacher)
+
+                obs_student = obs.clone()
+                # obs_student[:, 6:8] = yaw.detach()
+                obs_student[infos["delta_yaw_ok"], 6:8] = yaw.detach()[infos["delta_yaw_ok"]]
+                delta_yaw_ok_buffer.append(torch.nonzero(infos["delta_yaw_ok"]).size(0) / infos["delta_yaw_ok"].numel())
+                actions_student = self.alg.depth_actor(obs_student, hist_encoding=True, scandots_latent=depth_latent)
+                actions_student_buffer.append(actions_student)
+
+                # detach actions before feeding the env
+                cur_goal_idx = self.env.cur_goal_idx.clone()
+                if it < num_pretrain_iter:
+                    obs, privileged_obs, rewards, dones, infos = self.env.step(actions_teacher.detach())  # obs has changed to next_obs !! if done obs has been reset
+                else:
+                    obs, privileged_obs, rewards, dones, infos = self.env.step(actions_student.detach())  # obs has changed to next_obs !! if done obs has been reset
+                critic_obs = privileged_obs if privileged_obs is not None else obs
+                obs, critic_obs, rewards, dones = obs.to(self.device), critic_obs.to(self.device), rewards.to(self.device), dones.to(self.device)
+
+                if self.log_dir is not None:
+                        # Book keeping
+                        if 'episode' in infos:
+                            ep_infos.append(infos['episode'])
+                        cur_reward_sum += rewards
+                        cur_episode_length += 1
+                        new_ids = (dones > 0).nonzero(as_tuple=False)
+                        rewbuffer.extend(cur_reward_sum[new_ids][:, 0].cpu().numpy().tolist())
+                        lenbuffer.extend(cur_episode_length[new_ids][:, 0].cpu().numpy().tolist())
+                        num_waypoints_buffer.extend(cur_goal_idx[new_ids][:,0].cpu().numpy().tolist())
+                        cur_reward_sum[new_ids] = 0
+                        cur_episode_length[new_ids] = 0
+                
+            # if not depth_saved and depth_imgs is not []:
+            #     depth_saved = True
+            stop = time.time()
+            collection_time = stop - start
+            start = stop
+
+            delta_yaw_ok_percentage = sum(delta_yaw_ok_buffer) / len(delta_yaw_ok_buffer)
+            scandots_latent_buffer = torch.cat(scandots_latent_buffer, dim=0)
+            depth_latent_buffer = torch.cat(depth_latent_buffer, dim=0)
+            rgb_latent_buffer = torch.cat(rgb_latent_buffer, dim=0)
+
+            dual_encoder_loss = self.alg.update_both_encoders(depth_latent_buffer, rgb_latent_buffer)
+            # depth_encoder_loss = self.alg.update_depth_encoder(depth_latent_buffer, scandots_latent_buffer)
+
+            actions_teacher_buffer = torch.cat(actions_teacher_buffer, dim=0)
+            actions_student_buffer = torch.cat(actions_student_buffer, dim=0)
+            yaw_buffer_student = torch.cat(yaw_buffer_student, dim=0)
+            yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
+            depth_actor_loss, yaw_loss = self.alg.update_depth_actor(actions_student_buffer, actions_teacher_buffer, yaw_buffer_student, yaw_buffer_teacher)
+
+            # depth_encoder_loss, depth_actor_loss = self.alg.update_depth_both(depth_latent_buffer, scandots_latent_buffer, actions_student_buffer, actions_teacher_buffer)
+            stop = time.time()
+            learn_time = stop - start
+
+            self.alg.depth_encoder.detach_hidden_states()
+
+            if self.save_video_interval:
+                self.log_video(it)
+            if self.log_dir is not None:
+                self.log_vision(locals())
+            if (it-self.start_learning_iteration < 2500 and it % self.save_interval == 0) or \
+               (it-self.start_learning_iteration < 5000 and it % (2*self.save_interval) == 0) or \
+               (it-self.start_learning_iteration >= 5000 and it % (5*self.save_interval) == 0):
+                    self.save(os.path.join(self.log_dir, 'model_{}.pt'.format(it)))
+            if self.env.cfg.env.wandb_offline:
+                trigger_sync()
+            ep_infos.clear()
+
+    def learn_rgb_vision_phase3(self, num_learning_iterations, init_at_random_ep_len=False):
         if self.env.cfg.env.wandb_offline:
             trigger_sync = TriggerWandbSyncHook()
             wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
@@ -452,7 +725,7 @@ class OnPolicyRunner:
                     # rgb student
                     obs_prop_rgb = obs[:, :self.env.cfg.env.n_proprio].clone()
                     obs_prop_rgb[:, 6:8] = 0
-                    rgb_image = infos["rgb"].clone().squeeze(1)
+                    rgb_image = infos["rgb"].clone()
                     rgb_latent_and_yaw = self.alg.rgb_encoder(rgb_image, obs_prop_rgb)  # clone is crucial to avoid in-place operation
                     
                     rgb_latent = rgb_latent_and_yaw[:, :-2]
@@ -559,6 +832,7 @@ class OnPolicyRunner:
         wandb_dict['Loss_depth/delta_yaw_ok_percent'] = locs['delta_yaw_ok_percentage']
         wandb_dict['Loss_depth/depth_encoder'] = locs['depth_encoder_loss']
         wandb_dict['Loss_depth/depth_actor'] = locs['depth_actor_loss']
+        wandb_dict['Loss_depth/rgb_actor'] = locs['rgb_actor_loss']
         wandb_dict['Loss_depth/yaw'] = locs['yaw_loss']
         wandb_dict['Policy/mean_noise_std'] = mean_std.item()
         wandb_dict['Perf/total_fps'] = fps
