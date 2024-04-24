@@ -136,7 +136,7 @@ class PPO:
             self.rgb_encoder = rgb_encoder
             self.rgb_encoder_optimizer = optim.Adam(self.rgb_encoder.parameters(), lr=depth_encoder_paras["learning_rate"])
             self.rgb_actor = rgb_actor
-            self.depth_actor_optimizer = optim.Adam([*self.rgb_actor.parameters(), *self.rgb_encoder.parameters()], lr=depth_encoder_paras["learning_rate"])
+            self.rgb_actor_optimizer = optim.Adam([*self.rgb_actor.parameters(), *self.rgb_encoder.parameters()], lr=depth_encoder_paras["learning_rate"])
 
 
     def init_storage(self, num_envs, num_transitions_per_env, actor_obs_shape, critic_obs_shape, action_shape):

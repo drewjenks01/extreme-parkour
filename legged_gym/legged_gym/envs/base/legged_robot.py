@@ -49,7 +49,7 @@ from legged_gym.utils.helpers import class_to_dict
 from scipy.spatial.transform import Rotation as R
 import wandb
 from .legged_robot_config import LeggedRobotCfg
-from legged_gym.experiment.mesh_generation.generate_mesh import generate_rectangular_prism
+from experiment.mesh_generation.generate_mesh import generate_rectangular_prism
 
 from tqdm import tqdm
 import cv2
@@ -1153,11 +1153,11 @@ class LeggedRobot(BaseTask):
             options.fix_base_link = True
             H = 1.5
             nh = 6
-            filename =  LEGGED_GYM_ROOT_DIR+"/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/rectangular_prism_bumps.obj"
+            filename =  LEGGED_GYM_ROOT_DIR+"/experiment/mesh_generation/parkour_meshes/whole_map/rectangular_prism_bumps.obj"
 
             terrain_heights = self.terrain.height_field_raw * self.cfg.terrain.vertical_scale
             nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
-            W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length
+            W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width-2*self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length+2*self.cfg.terrain.terrain_length
 
             # generate the full map
             # seal the edges
@@ -1168,7 +1168,7 @@ class LeggedRobot(BaseTask):
 
             generate_rectangular_prism(L, W, H, nl, nw, nh, terrain_heights, filename)
 
-            urdf_root = LEGGED_GYM_ROOT_DIR+'/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/whole_map'
+            urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/whole_map'
             loaded_asset = self.gym.load_asset(self.sim, urdf_root, 'rectangular_prism_bumps.urdf', options)
 
         print("Creating env...")
@@ -1197,7 +1197,7 @@ class LeggedRobot(BaseTask):
 
             if self.cfg.domain_rand.randomize_ground_texture:
                 start_pose = gymapi.Transform()
-                start_pose.p = gymapi.Vec3(0.0, 0.0, 0.0)
+                start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, (self.cfg.terrain.num_cols//2)*self.cfg.terrain.terrain_width, -0.03))
                 start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
                 rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
                 self.gym.set_asset_rigid_shape_properties(loaded_asset, rigid_shape_props)
