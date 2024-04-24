@@ -62,7 +62,8 @@ def train(args):
     if args.supercloud:
         log_pth = LEGGED_GYM_ROOT_DIR + "/logs/{}/".format(args.proj_name) + args.exptid
     else:
-        log_pth = "/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/{}/".format(args.proj_name) + args.exptid
+        log_pth = LEGGED_GYM_ROOT_DIR + "/logs/{}/".format(args.proj_name) + args.exptid
+    print('Log path: ', log_pth)
     try:
         os.makedirs(log_pth)
     except:
