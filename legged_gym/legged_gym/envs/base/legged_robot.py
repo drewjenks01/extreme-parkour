@@ -1556,7 +1556,7 @@ class LeggedRobot(BaseTask):
     def _render_headless(self):
         if self.record_now and self.complete_video_frames is not None and len(self.complete_video_frames) == 0:
             bx, by, bz = self.root_states[self.robot_actor_idxs[0], 0], self.root_states[self.robot_actor_idxs[0], 1], self.root_states[self.robot_actor_idxs[0], 2]
-            target_loc = [bx-15, by-15 , bz+30]
+            target_loc = [bx, by, bz]
             cam_distance = [0, -1.2, 1.2]
             self.rendering_camera.set_position(target_loc, cam_distance)
             self.video_frame = self.rendering_camera.get_observation()
