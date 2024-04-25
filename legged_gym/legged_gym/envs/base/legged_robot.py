@@ -1171,8 +1171,7 @@ class LeggedRobot(BaseTask):
 
             terrain_heights = self.terrain.height_field_raw * self.cfg.terrain.vertical_scale
             nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
-            W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length
-
+            W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width+10*self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length-10*self.cfg.terrain.terrain_length
             # generate the full map
             # seal the edges
             terrain_heights[:, 0] = 0
