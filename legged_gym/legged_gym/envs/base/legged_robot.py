@@ -1168,21 +1168,24 @@ class LeggedRobot(BaseTask):
             #options.fix_base_link = True
             H = 1.5
             nh = 6
-            filename =  LEGGED_GYM_ROOT_DIR+"/experiment/mesh_generation/parkour_meshes/whole_map/rectangular_prism_bumps.obj"
+            # filename =  LEGGED_GYM_ROOT_DIR+"/experiment/mesh_generation/parkour_meshes/whole_map/rectangular_prism_bumps.obj"
 
-            terrain_heights = self.terrain.height_field_raw * self.cfg.terrain.vertical_scale
-            nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
-            W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width+10*self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length-10*self.cfg.terrain.terrain_length
-            # generate the full map
-            # seal the edges
-            terrain_heights[:, 0] = 0
-            terrain_heights[:, -1] = 0
-            terrain_heights[0, :] = 0
-            terrain_heights[-1, :] = 0
+            # terrain_heights = self.terrain.height_field_raw * self.cfg.terrain.vertical_scale
+            # nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
+            # W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width+10*self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length-10*self.cfg.terrain.terrain_length
+            # # generate the full map
+            # # seal the edges
+            # terrain_heights[:, 0] = 0
+            # terrain_heights[:, -1] = 0
+            # terrain_heights[0, :] = 0
+            # terrain_heights[-1, :] = 0
 
             # # for each terrain section, generate a rectangular prism
             asset_dict={}
-            for col in self.terrain_types:
+            print('Loading texture assets')
+            for col in tqdm(self.terrain_types):
+                if col.item() in asset_dict:
+                    continue
                 filename = LEGGED_GYM_ROOT_DIR+f"/experiment/mesh_generation/parkour_meshes/sep/rectangular_prism_bumps_{col}.obj"
                 terrain_heights = self.terrain.height_field_raw[:, self.terrain.border+col*self.terrain.width_per_env_pixels:self.terrain.border+(col+1)*self.terrain.width_per_env_pixels] * self.cfg.terrain.vertical_scale
                 terrain_heights[:, 0] = 0
@@ -1306,8 +1309,6 @@ class LeggedRobot(BaseTask):
             
             self.terrain_class = torch.from_numpy(self.terrain.terrain_type).to(self.device).to(torch.float)
             self.env_class[:] = self.terrain_class[self.terrain_levels, self.terrain_types]
-
-            print(self.terrain_levels, self.terrain_types, self.env_class, self.env_origins)
 
             self.terrain_goals = torch.from_numpy(self.terrain.goals).to(self.device).to(torch.float)
             self.env_goals = torch.zeros(self.num_envs, self.cfg.terrain.num_goals + self.cfg.env.num_future_goal_obs, 3, device=self.device, requires_grad=False)
