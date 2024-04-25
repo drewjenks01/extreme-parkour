@@ -146,13 +146,13 @@ class OnPolicyRunner:
         
         if self.if_depth and not self.if_rgb:
             self.learn = self.learn_vision
-            self.num_learning_iterations = 15000
+            self.num_learning_iterations = 20001
         elif self.if_rgb:
             self.learn = self.learn_rgb_vision
             self.num_learning_iterations = 20001
         else:
             self.learn = self.learn_RL
-            self.num_learning_iterations = 15000
+            self.num_learning_iterations = 20001
             
         # Log
         self.log_dir = log_dir
@@ -1083,6 +1083,11 @@ class OnPolicyRunner:
     def load(self, path, load_optimizer=True):
         print("*" * 80)
         print("Loading model from {}...".format(path))
+        if path.split('/')[-1] != 'model_latest.pt':
+            save_iter = int(path.split('_')[-1].replace('.pt',''))
+            self.resume_num = save_iter
+            print(f'Setting train state based on load path iter: {self.resume_num}')
+
         loaded_dict = torch.load(path, map_location=self.device)
         self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'])
         self.alg.estimator.load_state_dict(loaded_dict['estimator_state_dict'])
@@ -1098,23 +1103,34 @@ class OnPolicyRunner:
             else:
                 print("No saved depth actor, Copying actor critic actor to depth actor...")
                 self.alg.depth_actor.load_state_dict(self.alg.actor_critic.actor.state_dict())
-        if self.cfg['train_phase3']:
+        if self.if_rgb:
             if 'rgb_encoder_state_dict' not in loaded_dict:
                 warnings.warn("'rgb_encoder_state_dict' key does not exist, not loading rgb encoder...")
             else:
                 print("Saved rgb encoder detected, loading...")
-                try:
-                    save_iter = int(path.split('_')[-1].replace('.pt',''))
-                    self.resume_num = save_iter
-                except:
-                    self.resume_num = 0
+                # try:
+                #     save_iter = int(path.split('_')[-1].replace('.pt',''))
+                #     self.resume_num = save_iter
+                # except:
+                #     self.resume_num = 0
+            #     self.alg.rgb_encoder.load_state_dict(loaded_dict['rgb_encoder_state_dict'])
+            # if 'rgb_actor_state_dict' in loaded_dict:
+            #     print("Saved rgb actor detected, loading...")
+            #     self.alg.rgb_actor.load_state_dict(loaded_dict['rgb_actor_state_dict'])
+            # else:
+            #     print("No saved rgb actor, Copying depth actor to rgb actor...")
+            #     self.alg.rgb_actor.load_state_dict(self.alg.depth_actor.state_dict())
+            if 'rgb_encoder_state_dict' not in loaded_dict:
+                warnings.warn("'rgb_encoder_state_dict' key does not exist, not loading rgb encoder...")
+            else:
+                print("Saved rgb encoder detected, loading...")
                 self.alg.rgb_encoder.load_state_dict(loaded_dict['rgb_encoder_state_dict'])
             if 'rgb_actor_state_dict' in loaded_dict:
                 print("Saved rgb actor detected, loading...")
                 self.alg.rgb_actor.load_state_dict(loaded_dict['rgb_actor_state_dict'])
             else:
-                print("No saved rgb actor, Copying depth actor to rgb actor...")
-                self.alg.rgb_actor.load_state_dict(self.alg.depth_actor.state_dict())
+                print("No saved rgb actor, Copying actor critic actor to rgb actor...")
+                self.alg.rgb_actor.load_state_dict(self.alg.actor_critic.actor.state_dict())
 
         if load_optimizer:
             self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])

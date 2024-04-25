@@ -175,7 +175,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             env_cfg.domain_rand.randomize_lighting = True
             env_cfg.domain_rand.randomize_ground_texture = True
             env_cfg.domain_rand.randomize_ground_color = False
-        if env_cfg.depth.use_camera:  # set camera specific parameters
+            env_cfg.terrain.border_size = 0
+        if env_cfg.depth.use_camera and args.headless:  # set camera specific parameters
             env_cfg.env.num_envs = env_cfg.depth.camera_num_envs
             env_cfg.terrain.num_rows = env_cfg.depth.camera_terrain_num_rows
             env_cfg.terrain.num_cols = env_cfg.depth.camera_terrain_num_cols

@@ -163,7 +163,7 @@ class LeggedRobotCfg(BaseConfig):
         horizontal_scale = 0.05 # [m] influence computation time by a lot
         horizontal_scale_camera = 0.1
         vertical_scale = 0.005 # [m]
-        border_size = 0 # [m]
+        border_size = 5 # [m]
         height = [0.02, 0.06]
         simplify_grid = False
         gap_size = [0.02, 0.1]

@@ -802,7 +802,8 @@ class LeggedRobot(BaseTask):
         else:
             self.root_states[robot_env_ids] = self.base_init_state
             self.root_states[robot_env_ids, :3] += self.env_origins[env_ids]
-        env_ids_int32 = env_ids.to(dtype=torch.int32)
+        
+        env_ids_int32 = robot_env_ids.to(dtype=torch.int32)
         self.gym.set_actor_root_state_tensor_indexed(self.sim,
                                                      gymtorch.unwrap_tensor(self.root_states),
                                                      gymtorch.unwrap_tensor(env_ids_int32), len(env_ids_int32))
@@ -1151,13 +1152,26 @@ class LeggedRobot(BaseTask):
         if self.cfg.domain_rand.randomize_ground_texture:
             options = gymapi.AssetOptions()
             options.fix_base_link = True
+            # options.armature = 0.01
+            # options.density = 1000
+            # options.use_mesh_materials = True
+            # options.mesh_normal_mode = gymapi.COMPUTE_PER_VERTEX
+            # options.override_com = True
+            # options.override_inertia = True
+            # options.vhacd_enabled = True
+            # options.vhacd_params = gymapi.VhacdParams()
+            # options.vhacd_params.resolution = 3000000
+            # options.vhacd_params.max_num_vertices_per_ch = 1024
+            # options.vhacd_params.max_convex_hulls = 64
+            # options.vhacd_params.concavity = 0.0
+            #options.fix_base_link = True
             H = 1.5
             nh = 6
             filename =  LEGGED_GYM_ROOT_DIR+"/experiment/mesh_generation/parkour_meshes/whole_map/rectangular_prism_bumps.obj"
 
             terrain_heights = self.terrain.height_field_raw * self.cfg.terrain.vertical_scale
             nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
-            W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width-2*self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length+2*self.cfg.terrain.terrain_length
+            W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length
 
             # generate the full map
             # seal the edges
@@ -1201,7 +1215,7 @@ class LeggedRobot(BaseTask):
                 start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
                 rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
                 self.gym.set_asset_rigid_shape_properties(loaded_asset, rigid_shape_props)
-                ground_handle = self.gym.create_actor(env_handle, loaded_asset, start_pose, "ground", -1, 0, 0)
+                ground_handle = self.gym.create_actor(env_handle, loaded_asset, start_pose, "ground", -1, -1)
                 self.ground_handles.append(ground_handle)
                 #self.gym.set_rigid_body_color(env_handle, ground_handle, 0, gymapi.MESH_VISUAL, gymapi.Vec3(0.5, 0.5, 0.5))
                 rand_texture = np.random.randint(0, len(self.textures))
@@ -1543,7 +1557,7 @@ class LeggedRobot(BaseTask):
     def _render_headless(self):
         if self.record_now and self.complete_video_frames is not None and len(self.complete_video_frames) == 0:
             bx, by, bz = self.root_states[self.robot_actor_idxs[0], 0], self.root_states[self.robot_actor_idxs[0], 1], self.root_states[self.robot_actor_idxs[0], 2]
-            target_loc = [bx, by , bz]
+            target_loc = [bx-15, by-15 , bz+30]
             cam_distance = [0, -1.2, 1.2]
             self.rendering_camera.set_position(target_loc, cam_distance)
             self.video_frame = self.rendering_camera.get_observation()
