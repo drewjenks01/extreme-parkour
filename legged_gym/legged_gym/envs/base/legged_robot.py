@@ -28,6 +28,7 @@
 #
 # Copyright (c) 2021 ETH Zurich, Nikita Rudin
 
+from multiprocessing.context import assert_spawning
 from legged_gym import LEGGED_GYM_ROOT_DIR, envs
 from time import time
 from warnings import WarningMessage
@@ -1179,13 +1180,35 @@ class LeggedRobot(BaseTask):
             terrain_heights[0, :] = 0
             terrain_heights[-1, :] = 0
 
-            generate_rectangular_prism(L, W, H, nl, nw, nh, terrain_heights, filename)
+            # # for each terrain section, generate a rectangular prism
+            asset_dict={}
+            for col in self.terrain_types:
+                filename = LEGGED_GYM_ROOT_DIR+f"/experiment/mesh_generation/parkour_meshes/sep/rectangular_prism_bumps_{col}.obj"
+                terrain_heights = self.terrain.height_field_raw[:, self.terrain.border+col*self.terrain.width_per_env_pixels:self.terrain.border+(col+1)*self.terrain.width_per_env_pixels] * self.cfg.terrain.vertical_scale
+                terrain_heights[:, 0] = 0
+                terrain_heights[:, -1] = 0
+                terrain_heights[0, :] = 0
+                terrain_heights[-1, :] = 0
+                nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
+                L, W = 2*self.cfg.terrain.border_size+self.cfg.terrain.num_rows * self.cfg.terrain.terrain_length, self.cfg.terrain.terrain_width
+                generate_rectangular_prism(L, W, H, nl, nw, nh, terrain_heights, filename)
 
-            urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/whole_map'
-            loaded_asset = self.gym.load_asset(self.sim, urdf_root, 'rectangular_prism_bumps.urdf', options)
+                urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/sep'
+                loaded_asset = self.gym.load_asset(self.sim, urdf_root, f'rectangular_prism_bumps_{col}.urdf', options)
+                asset_dict[col.item()] = loaded_asset
+
+            #generate_rectangular_prism(L, W, H, nl, nw, nh, terrain_heights, filename)
+
+            # urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/whole_map'
+            # loaded_asset = self.gym.load_asset(self.sim, urdf_root, 'rectangular_prism_bumps.urdf', options)
 
         print("Creating env...")
         for i in tqdm(range(self.num_envs)):
+
+            if self.cfg.domain_rand.randomize_ground_texture:
+                col = self.terrain_types[i]
+                loaded_asset = asset_dict[col.item()]
+
             # create env instance
             env_handle = self.gym.create_env(self.sim, env_lower, env_upper, int(np.sqrt(self.num_envs)))
             pos = self.env_origins[i].clone()
@@ -1210,7 +1233,8 @@ class LeggedRobot(BaseTask):
 
             if self.cfg.domain_rand.randomize_ground_texture:
                 start_pose = gymapi.Transform()
-                start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, (self.cfg.terrain.num_cols//2)*self.cfg.terrain.terrain_width, -0.04))
+                #start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, (self.cfg.terrain.num_cols//2)*self.cfg.terrain.terrain_width, -0.04))
+                start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, col * self.cfg.terrain.terrain_width + self.cfg.terrain.terrain_width / 2, 0.04))
                 start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
                 rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
                 self.gym.set_asset_rigid_shape_properties(loaded_asset, rigid_shape_props)
@@ -1282,6 +1306,8 @@ class LeggedRobot(BaseTask):
             
             self.terrain_class = torch.from_numpy(self.terrain.terrain_type).to(self.device).to(torch.float)
             self.env_class[:] = self.terrain_class[self.terrain_levels, self.terrain_types]
+
+            print(self.terrain_levels, self.terrain_types, self.env_class, self.env_origins)
 
             self.terrain_goals = torch.from_numpy(self.terrain.goals).to(self.device).to(torch.float)
             self.env_goals = torch.zeros(self.num_envs, self.cfg.terrain.num_goals + self.cfg.env.num_future_goal_obs, 3, device=self.device, requires_grad=False)
