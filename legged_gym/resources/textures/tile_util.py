@@ -1,6 +1,6 @@
 from PIL import Image
 
-from legged_gym.legged_gym import LEGGED_GYM_ROOT_DIR
+from legged_gym import LEGGED_GYM_ROOT_DIR
 
 def create_tiled_image(image_path, tile_count_x=10, tile_count_y=10):
     # Load the image
@@ -22,12 +22,11 @@ def create_tiled_image(image_path, tile_count_x=10, tile_count_y=10):
             new_image.paste(resized_image, (tile_width * x, tile_height * y))
 
     # Save the new tiled image
-    new_image.save(f'tiled/tiled_{image_path}')
+    new_image.save(image_path.replace('regular', 'tiled'))
 
 if __name__ == '__main__':
     import os
-    image_paths = os.listdir(LEGGED_GYM_ROOT_DIR+'/textures')
+    image_paths = os.listdir(LEGGED_GYM_ROOT_DIR+'/resources/textures/regular')
     # image_path = 'ice_texture.jpg'  # Replace with the path to your image (PNG or JPG)
     for image_path in image_paths:
-        if '.jpg' in image_path:
-            create_tiled_image(image_path, tile_count_x=5, tile_count_y=5)
+        create_tiled_image(LEGGED_GYM_ROOT_DIR+'/resources/textures/regular/'+image_path, tile_count_x=5, tile_count_y=5)
