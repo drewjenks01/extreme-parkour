@@ -1,3 +1,4 @@
+from legged_gym import LEGGED_GYM_ROOT_DIR
 from scipy.spatial.transform import Rotation
 import numpy as np
 import os
@@ -152,7 +153,7 @@ class ObjectUrdfBuilder:
         # Update the filenames and object name
         new_urdf = copy.deepcopy(self.urdf_base)
         self.replace_urdf_attribute(new_urdf,'.//visual/geometry/mesh', 'filename', object_file)
-        self.replace_urdf_attribute(new_urdf,'.//collision/geometry/mesh', 'filename', collision_file)
+        #self.replace_urdf_attribute(new_urdf,'.//collision/geometry/mesh', 'filename', collision_file)
         new_urdf.attrib['name']= object_name
 
         # Update the overrides
@@ -189,12 +190,7 @@ class ObjectUrdfBuilder:
 
 
             # Check if there's a scale factor and apply it
-            scale_ob = new_urdf.find('.//collision/geometry/mesh')
-            if scale_ob is not None:
-                scale_str = scale_ob.attrib.get('scale', '1 1 1')
-                scale = self._str2list(scale_str)
-            else:
-                scale = [1, 1, 1]
+            scale = [1, 1, 1]
 
 
             for idx,axis in enumerate(mass_center):
@@ -296,7 +292,7 @@ class ObjectUrdfBuilder:
         else:
             urdf_out = self.update_urdf(rel, name, override=overrides, mass_center=mass_center)
         
-        self.save_urdf(urdf_out, name+'.urdf', force_overwrite)
+        self.save_urdf(urdf_out, name.replace('.obj', '.urdf'), force_overwrite)
 
 
     # Build the URDFs for all objects in your library.
@@ -326,7 +322,14 @@ class ObjectUrdfBuilder:
 
 
 if __name__ == '__main__':
-    object_folder = "/data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/experiment/mesh_generation/parkour_meshes/whole_map"
+    object_folder = LEGGED_GYM_ROOT_DIR+"/experiment/mesh_generation/parkour_meshes/whole_map"
 
     builder = ObjectUrdfBuilder(object_folder)
-    builder.build_urdf(filename=f"{object_folder}/rectangular_prism_bumps.obj", force_overwrite=True, decompose_concave=False, force_decompose=False, center = 'mass')
+    builder.build_urdf(filename=f"{object_folder}/rectangular_prism_bumps.obj", force_overwrite=True, decompose_concave=False, force_decompose=False, center = 'centroid')
+
+
+    object_folder = LEGGED_GYM_ROOT_DIR+"/experiment/mesh_generation/parkour_meshes/sep"
+
+    builder = ObjectUrdfBuilder(object_folder)
+    for file in os.listdir(object_folder):
+        builder.build_urdf(filename=f"{object_folder}/{file}", force_overwrite=True, decompose_concave=False, force_decompose=False, center = 'centroid')
