@@ -1197,7 +1197,7 @@ class LeggedRobot(BaseTask):
 
             if self.cfg.domain_rand.randomize_ground_texture:
                 start_pose = gymapi.Transform()
-                start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, (self.cfg.terrain.num_cols//2)*self.cfg.terrain.terrain_width, -0.03))
+                start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, (self.cfg.terrain.num_cols//2)*self.cfg.terrain.terrain_width, -0.04))
                 start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
                 rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
                 self.gym.set_asset_rigid_shape_properties(loaded_asset, rigid_shape_props)
