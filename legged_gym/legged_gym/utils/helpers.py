@@ -166,7 +166,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             if args.use_depth:
                 env_cfg.depth.use_depth = args.use_depth
 
-            if not args.use_rgb and not args.ue_depth:
+            if not args.use_rgb and not args.use_depth:
                 raise Exception('Using camera but didnt specify image type')
 
 
@@ -217,7 +217,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.seed = args.seed
         # alg runner parameters
         if args.use_camera:
-            cfg_train.depth_encoder.if_depth = not args.use_rgb
+            cfg_train.depth_encoder.if_depth = args.use_depth
             cfg_train.depth_encoder.if_rgb = args.use_rgb
 
         if args.max_iterations is not None:
@@ -244,6 +244,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.runner.train_phase3 = True
         if args.bigger_image:
             cfg_train.depth_encoder.big_encoder = True
+        if args.liquid_nn:
+            cfg_train.depth_encoder.liquid_nn = True
 
     return env_cfg, cfg_train
 
@@ -301,6 +303,7 @@ def get_args():
         {"name": "--contact_filt", "action": "store_true", "default": False, "help": "Use original contact filter"},
         {"name": "--supercloud", "action": "store_true", "default": False, "help": "Use supercloud compute"},
         {"name": "--bigger_image", "action": "store_true", "default": False, "help": "Use bigger rgb images"},
+        {"name": "--liquid_nn", "action": "store_true", "default": False, "help": "Use liquid nn"},
     ]
     # parse arguments
     args = parse_arguments(
