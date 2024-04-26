@@ -2,6 +2,8 @@ import torch
 import torch.nn as nn
 import sys
 import torchvision
+from ncps.torch import CfC
+from ncps.wirings import AutoNCP
 
 
 class RecurrentDepthBackbone(nn.Module):
@@ -40,6 +42,46 @@ class RecurrentDepthBackbone(nn.Module):
 
     def detach_hidden_states(self):
         self.hidden_states = self.hidden_states.detach().clone()
+
+class LiquidBackbone(nn.Module):
+    def __init__(self, base_backbone, env_cfg):
+        super().__init__()
+        activation = nn.ELU()
+        last_activation = nn.Tanh()
+        self.base_backbone = base_backbone
+        if env_cfg == None:
+            self.combination_mlp = nn.Sequential(
+                                    nn.Linear(32 + 53, 128),
+                                    activation,
+                                    nn.Linear(128, 32)
+                                )
+        else:
+            self.combination_mlp = nn.Sequential(
+                                        nn.Linear(32 + env_cfg.env.n_proprio, 128),
+                                        activation,
+                                        nn.Linear(128, 32)
+                                    )
+        #self.rnn = nn.GRU(input_size=32, hidden_size=512, batch_first=True)
+        self.output_mlp = nn.Sequential(
+                                nn.Linear(512, 32+2),
+                                last_activation
+                            )
+    
+        self.rnn = CfC(32, 512, batch_first=True,)
+        self.hidden_states = None
+
+    def forward(self, depth_image, proprioception):
+        depth_image = self.base_backbone(depth_image)
+        depth_latent = self.combination_mlp(torch.cat((depth_image, proprioception), dim=-1))
+        # depth_latent = self.base_backbone(depth_image)
+        depth_latent, self.hidden_states = self.rnn(depth_latent[:, None, :], self.hidden_states)
+        depth_latent = self.output_mlp(depth_latent.squeeze(1))
+        
+        return depth_latent
+
+    def detach_hidden_states(self):
+        self.hidden_states = self.hidden_states.detach().clone()
+        
 
 class StackDepthEncoder(nn.Module):
     def __init__(self, base_backbone, env_cfg) -> None:
