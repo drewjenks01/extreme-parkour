@@ -1,1 +1,0 @@
-<robot name="mesh"><link name="mesh"><visual><origin xyz="10 25 0" rpy="0 0 0" /><geometry><mesh filename="mesh.obj" /></geometry><material name="Material"><color rgba="0.5 0.5 0.5 1" /></material></visual></link></robot>

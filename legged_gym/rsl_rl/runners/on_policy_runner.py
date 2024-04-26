@@ -426,7 +426,7 @@ class OnPolicyRunner:
         self.alg.rgb_encoder.train()
         self.alg.rgb_actor.train()
 
-        num_pretrain_iter = 0
+        num_pretrain_iter = 100
         for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
             start = time.time()
             rgb_latent_buffer = []
@@ -522,10 +522,15 @@ class OnPolicyRunner:
             ep_infos.clear()
 
     def learn_rgb_depth_together_vision(self, num_learning_iterations, init_at_random_ep_len=False):
+        print('Training RGB and Depth together')
         if self.env.cfg.env.wandb_offline:
             trigger_sync = TriggerWandbSyncHook()
-            wandb.watch(self.alg.depth_actor, log=None, log_freq=10)
-            wandb.watch(self.alg.depth_encoder, log=None, log_freq=10)
+            # wandb.watch(self.alg.depth_actor, log=None, log_freq=10)
+            # wandb.watch(self.alg.depth_encoder, log=None, log_freq=10)
+            # wandb.watch(self.alg.rgb_actor, log=None, log_freq=10)
+            # wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
+
+        assert self.if_depth and self.if_rgb
 
         num_learning_iterations = self.num_learning_iterations
     
@@ -542,14 +547,13 @@ class OnPolicyRunner:
         obs = self.env.get_observations()
         infos = {}
         infos["depth"] = self.env.depth_buffer.clone().to(self.device)[:, -1] if self.if_depth else None
-        infos["rgb"] = self.env.rgb_buffer.clone().to(self.device)[:, -1] if self.if_depth else None
+        infos["rgb"] = self.env.rgb_buffer.clone().to(self.device)[:, -1] if self.if_rgb else None
         infos["delta_yaw_ok"] = torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
         self.alg.depth_encoder.train()
         self.alg.rgb_encoder.train()
         self.alg.depth_actor.train()
 
-        num_pretrain_iter = 0
-        depth_saved=False
+        num_pretrain_iter = 100
         for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
             start = time.time()
             depth_latent_buffer = []
@@ -579,7 +583,7 @@ class OnPolicyRunner:
 
                     obs_prop_rgb = obs[:, :self.env.cfg.env.n_proprio].clone()
                     obs_prop_rgb[:, 6:8] = 0
-                    rgb_latent_and_yaw = self.alg.depth_encoder(infos["rgb"].clone(), obs_prop_rgb)  # clone is crucial to avoid in-place operation
+                    rgb_latent_and_yaw = self.alg.rgb_encoder(infos["rgb"].clone(), obs_prop_rgb)  # clone is crucial to avoid in-place operation
                     
                     rgb_latent = rgb_latent_and_yaw[:, :-2]
                     rgb_yaw = 1.5*rgb_latent_and_yaw[:, -2:]
@@ -627,9 +631,7 @@ class OnPolicyRunner:
                         num_waypoints_buffer.extend(cur_goal_idx[new_ids][:,0].cpu().numpy().tolist())
                         cur_reward_sum[new_ids] = 0
                         cur_episode_length[new_ids] = 0
-                
-            # if not depth_saved and depth_imgs is not []:
-            #     depth_saved = True
+
             stop = time.time()
             collection_time = stop - start
             start = stop
@@ -653,6 +655,7 @@ class OnPolicyRunner:
             learn_time = stop - start
 
             self.alg.depth_encoder.detach_hidden_states()
+            self.alg.rgb_encoder.detach_hidden_states()
 
             if self.save_video_interval:
                 self.log_video(it)
@@ -1074,9 +1077,14 @@ class OnPolicyRunner:
         if self.if_depth:
             state_dict['depth_encoder_state_dict'] = self.alg.depth_encoder.state_dict()
             state_dict['depth_actor_state_dict'] = self.alg.depth_actor.state_dict()
-        if self.cfg['train_phase3']:
+        if self.if_rgb:
             state_dict['rgb_encoder_state_dict'] = self.alg.rgb_encoder.state_dict()
-            state_dict['rgb_actor_state_dict'] = self.alg.rgb_actor.state_dict()
+
+            # special case where we train together using 1 actor
+            if self.if_rgb and self.if_depth:
+                state_dict['rgb_actor_state_dict'] = self.alg.depth_actor.state_dict()
+            else:
+                state_dict['rgb_actor_state_dict'] = self.alg.rgb_actor.state_dict()
         torch.save(state_dict, path)
         wandb.save(path)
 

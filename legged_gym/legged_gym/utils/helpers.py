@@ -211,7 +211,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
 
         if args.debug:
             env_cfg.terrain.num_cols = 20
-            env_cfg.env.num_envs = 8
+            env_cfg.env.num_envs = 4
     if cfg_train is not None:
         if args.seed is not None:
             cfg_train.seed = args.seed

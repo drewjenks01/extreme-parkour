@@ -5,8 +5,8 @@ from legged_gym import LEGGED_GYM_ROOT_DIR
 def create_tiled_image(image_path, tile_count_x=10, tile_count_y=10):
     # Load the image
     original_image = Image.open(image_path)
-    # width, height = original_image.size
-    width, height = 3000, 2000
+    width, height = original_image.size
+    #width, height = 3000, 2000
 
     # Calculate the size of each tile
     tile_width = width // tile_count_x

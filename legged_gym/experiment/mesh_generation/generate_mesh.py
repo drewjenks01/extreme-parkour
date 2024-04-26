@@ -63,6 +63,10 @@ def generate_rectangular_prism(L, W, H, nl, nw, nh, terrain_heights, filename):
             faces.append((idx1 + 1, idx3 + 1, idx4 + 1, idx2 + 1))
 
     with open(filename, 'w') as f:
+        f.write('# Blender 3.1.2\n')
+        f.write('# www.blender.org\n')
+        f.write('mtllib rectangular_prism_bumps.mtl\n')
+        f.write(f'o {filename.split("/")[-1].replace(".obj", "")}\n')
         for v in vertices:
             f.write(f"v {v[0]} {v[1]} {v[2]}\n")
 

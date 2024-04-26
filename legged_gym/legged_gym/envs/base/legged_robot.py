@@ -34,6 +34,7 @@ from time import time
 from warnings import WarningMessage
 import numpy as np
 import os
+from PIL import Image
 from torchvision.transforms import Compose, Resize, CenterCrop, Normalize
 
 from isaacgym.torch_utils import *
@@ -134,6 +135,9 @@ class LeggedRobot(BaseTask):
 
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
         self.post_physics_step()
+
+
+        self.curr_rgb_img = torch.zeros((3,self.cfg.depth.original[1], self.cfg.depth.original[0]))
 
 
     def step(self, actions):
@@ -258,6 +262,10 @@ class LeggedRobot(BaseTask):
                                                                 gymapi.IMAGE_COLOR)
             
             rgb_image = gymtorch.wrap_tensor(rgb_image_)
+
+            if i==0:
+                self.curr_rgb_img = rgb_image.clone()[:, :, :3].permute(2, 0, 1)
+
             rgb_image = self.process_rgb_image(rgb_image, i)
 
             init_flag = self.episode_length_buf <= 1
@@ -357,13 +365,13 @@ class LeggedRobot(BaseTask):
         if self.viewer and self.enable_viewer_sync and self.debug_viz:
             self.gym.clear_lines(self.viewer)
             # self._draw_height_samples()
-            self._draw_goals()
-            self._draw_feet()
+            # self._draw_goals()
+            # self._draw_feet()
             if self.cfg.depth.use_camera:
                 if self.cfg.depth.use_rgb:
                     window_name = "RGB Image"
                     cv2.namedWindow(window_name, cv2.WINDOW_NORMAL)
-                    cv2.imshow("RGB Image", self.rgb_buffer[self.lookat_id, -1].permute(1,2,0).cpu().numpy())
+                    cv2.imshow("RGB Image", cv2.cvtColor(self.curr_rgb_img.permute(1,2,0).cpu().numpy(), cv2.COLOR_RGB2BGR))
                     cv2.waitKey(1)
                 else:
                     window_name = "Depth Image"
@@ -415,6 +423,9 @@ class LeggedRobot(BaseTask):
         # avoid updating command curriculum at each step since the maximum command is common to all envs
         if self.cfg.commands.curriculum and (self.common_step_counter % self.max_episode_length==0):
             self.update_command_curriculum(env_ids)
+
+        if self.cfg.domain_rand.randomize_ground_texture:
+            self._randomize_ground_texture(env_ids)
 
         # reset robot states
         self._reset_dofs(env_ids)
@@ -691,9 +702,6 @@ class LeggedRobot(BaseTask):
         if self.cfg.domain_rand.randomize_lighting:
             self._randomize_lighting()
 
-        if self.cfg.domain_rand.randomize_ground_texture:
-            self._randomize_ground_texture()
-
     def _randomize_lighting(self):
         intensity = np.random.uniform(0.2, 0.8)
         intensity = gymapi.Vec3(intensity, intensity, intensity)
@@ -704,11 +712,11 @@ class LeggedRobot(BaseTask):
         direction = gymapi.Vec3(direction[0], direction[1], direction[2])
         self.gym.set_light_parameters(self.sim, 0, intensity, ambient, direction)
 
-    def _randomize_ground_texture(self):
-
-        for env_handle, ground_handle in zip(self.envs, self.ground_handles):
+    def _randomize_ground_texture(self, env_ids):
+        
+        for env_id in env_ids:
             rand_texture = np.random.randint(0, len(self.textures))
-            self.gym.set_rigid_body_texture(env_handle, ground_handle, 0, gymapi.MeshType.MESH_VISUAL, self.textures[rand_texture])
+            self.gym.set_rigid_body_texture(self.envs[env_id], self.ground_handles[env_id], 0, gymapi.MeshType.MESH_VISUAL, self.textures[rand_texture])
         
     def _gather_cur_goals(self, future=0):
         return self.env_goals.gather(1, (self.cur_goal_idx[:, None, None]+future).expand(-1, -1, self.env_goals.shape[-1])).squeeze(1)
@@ -1087,11 +1095,11 @@ class LeggedRobot(BaseTask):
         asset_file = os.path.basename(asset_path)
 
         if self.cfg.domain_rand.randomize_ground_texture:
-            texture_path = LEGGED_GYM_ROOT_DIR + "/resources/textures/"
+            texture_path = LEGGED_GYM_ROOT_DIR + "/resources/textures/regular/"
             texture_files = os.listdir(texture_path)
-            print(f'# textures: {len(texture_files)}')
+            print(f'Loading # textures: {len(texture_files)}')
             texture_paths = [texture_path + f for f in texture_files]
-            self.textures = [self.gym.create_texture_from_file(self.sim, texture_path) for texture_path in texture_paths]
+            self.textures = [self.gym.create_texture_from_file(self.sim, texture_path) for texture_path in tqdm(texture_paths)]
 
         asset_options = gymapi.AssetOptions()
         asset_options.default_dof_drive_mode = self.cfg.asset.default_dof_drive_mode
@@ -1144,6 +1152,7 @@ class LeggedRobot(BaseTask):
         env_upper = gymapi.Vec3(0., 0., 0.)
         self.actor_handles = []
         self.robot_actor_idxs = []
+        self.ground_actor_idxs = []
         self.envs = []
         self.ground_handles = []
         self.cam_handles = []
@@ -1153,32 +1162,6 @@ class LeggedRobot(BaseTask):
         if self.cfg.domain_rand.randomize_ground_texture:
             options = gymapi.AssetOptions()
             options.fix_base_link = True
-            # options.armature = 0.01
-            # options.density = 1000
-            # options.use_mesh_materials = True
-            # options.mesh_normal_mode = gymapi.COMPUTE_PER_VERTEX
-            # options.override_com = True
-            # options.override_inertia = True
-            # options.vhacd_enabled = True
-            # options.vhacd_params = gymapi.VhacdParams()
-            # options.vhacd_params.resolution = 3000000
-            # options.vhacd_params.max_num_vertices_per_ch = 1024
-            # options.vhacd_params.max_convex_hulls = 64
-            # options.vhacd_params.concavity = 0.0
-            #options.fix_base_link = True
-            H = 1.5
-            nh = 6
-            # filename =  LEGGED_GYM_ROOT_DIR+"/experiment/mesh_generation/parkour_meshes/whole_map/rectangular_prism_bumps.obj"
-
-            # terrain_heights = self.terrain.height_field_raw * self.cfg.terrain.vertical_scale
-            # nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
-            # W, L = self.cfg.terrain.num_rows * self.cfg.terrain.terrain_width+10*self.cfg.terrain.terrain_width, self.cfg.terrain.num_cols * self.cfg.terrain.terrain_length-10*self.cfg.terrain.terrain_length
-            # # generate the full map
-            # # seal the edges
-            # terrain_heights[:, 0] = 0
-            # terrain_heights[:, -1] = 0
-            # terrain_heights[0, :] = 0
-            # terrain_heights[-1, :] = 0
 
             # # for each terrain section, generate a rectangular prism
             asset_dict={}
@@ -1186,24 +1169,9 @@ class LeggedRobot(BaseTask):
             for col in tqdm(self.terrain_types):
                 if col.item() in asset_dict:
                     continue
-                filename = LEGGED_GYM_ROOT_DIR+f"/experiment/mesh_generation/parkour_meshes/sep/rectangular_prism_bumps_{col}.obj"
-                terrain_heights = self.terrain.height_field_raw[:, self.terrain.border+col*self.terrain.width_per_env_pixels:self.terrain.border+(col+1)*self.terrain.width_per_env_pixels] * self.cfg.terrain.vertical_scale
-                terrain_heights[:, 0] = 0
-                terrain_heights[:, -1] = 0
-                terrain_heights[0, :] = 0
-                terrain_heights[-1, :] = 0
-                nl, nw = terrain_heights.shape[0] - 1, terrain_heights.shape[1] - 1
-                L, W = 2*self.cfg.terrain.border_size+self.cfg.terrain.num_rows * self.cfg.terrain.terrain_length, self.cfg.terrain.terrain_width
-                generate_rectangular_prism(L, W, H, nl, nw, nh, terrain_heights, filename)
-
-                urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/sep'
+                urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/sep_new'
                 loaded_asset = self.gym.load_asset(self.sim, urdf_root, f'rectangular_prism_bumps_{col}.urdf', options)
                 asset_dict[col.item()] = loaded_asset
-
-            #generate_rectangular_prism(L, W, H, nl, nw, nh, terrain_heights, filename)
-
-            # urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/whole_map'
-            # loaded_asset = self.gym.load_asset(self.sim, urdf_root, 'rectangular_prism_bumps.urdf', options)
 
         print("Creating env...")
         for i in tqdm(range(self.num_envs)):
@@ -1225,9 +1193,6 @@ class LeggedRobot(BaseTask):
             rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
             self.gym.set_asset_rigid_shape_properties(robot_asset, rigid_shape_props)
             anymal_handle = self.gym.create_actor(env_handle, robot_asset, start_pose, "anymal", i, self.cfg.asset.self_collisions, 0)
-            # if self.cfg.domain_rand.randomize_ground_color:
-            #     color = list(np.random.uniform(0, 1, size=3))
-            #     self.gym.set_rigid_body_color(env_handle, anymal_handle, -1, gymapi.MESH_VISUAL, gymapi.Vec3(color[0], color[1], color[2]))
             dof_props = self._process_dof_props(dof_props_asset, i)
             self.gym.set_actor_dof_properties(env_handle, anymal_handle, dof_props)
             body_props = self.gym.get_actor_rigid_body_properties(env_handle, anymal_handle)
@@ -1236,26 +1201,23 @@ class LeggedRobot(BaseTask):
 
             if self.cfg.domain_rand.randomize_ground_texture:
                 start_pose = gymapi.Transform()
-                #start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, (self.cfg.terrain.num_cols//2)*self.cfg.terrain.terrain_width, -0.04))
-                start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, col * self.cfg.terrain.terrain_width + self.cfg.terrain.terrain_width / 2, 0.04))
-                start_pose.r = gymapi.Quat(0.0, 0.0, 0.0, 1.0)
+                start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, col * self.cfg.terrain.terrain_width + self.cfg.terrain.terrain_width / 2, 0.03))
                 rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
                 self.gym.set_asset_rigid_shape_properties(loaded_asset, rigid_shape_props)
                 ground_handle = self.gym.create_actor(env_handle, loaded_asset, start_pose, "ground", -1, -1)
                 self.ground_handles.append(ground_handle)
-                #self.gym.set_rigid_body_color(env_handle, ground_handle, 0, gymapi.MESH_VISUAL, gymapi.Vec3(0.5, 0.5, 0.5))
-                rand_texture = np.random.randint(0, len(self.textures))
-                self.gym.set_rigid_body_texture(env_handle, ground_handle, 0, gymapi.MeshType.MESH_VISUAL, self.textures[rand_texture])
 
             self.envs.append(env_handle)
             self.actor_handles.append(anymal_handle)
             self.robot_actor_idxs.append(self.gym.get_actor_index(env_handle, anymal_handle, gymapi.DOMAIN_SIM))
+            self.ground_actor_idxs.append(self.gym.get_actor_index(env_handle, ground_handle, gymapi.DOMAIN_SIM))
             
             self.attach_camera(i, env_handle, anymal_handle)
 
             self.mass_params_tensor[i, :] = torch.from_numpy(mass_params).to(self.device).to(torch.float)
         
         self.robot_actor_idxs = torch.Tensor(self.robot_actor_idxs).to(device=self.device,dtype=torch.long)
+        self.ground_actor_idxs = torch.Tensor(self.ground_actor_idxs).to(device=self.device,dtype=torch.long)
         if self.cfg.domain_rand.randomize_friction:
             self.friction_coeffs_tensor = self.friction_coeffs.to(self.device).to(torch.float).squeeze(-1)
 
