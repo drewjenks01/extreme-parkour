@@ -112,7 +112,12 @@ class OnPolicyRunner:
                                                         self.depth_encoder_cfg["hidden_dims"],
                                                         num_frames=3
                                                         )
-            rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg).to(self.device)
+            
+            if self.depth_encoder_cfg['liquid_nn']:
+                print('Using liquid nn encoder')
+                rgb_encoder = LiquidBackbone(rgb_backbone, env.cfg).to(self.device)
+            else:
+                rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg).to(self.device)
             
             
             rgb_actor = deepcopy(actor_critic.actor)
