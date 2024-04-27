@@ -119,8 +119,10 @@ class OnPolicyRunner:
             else:
                 rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg).to(self.device)
             
-            
-            rgb_actor = deepcopy(actor_critic.actor)
+            if not self.depth_encoder_cfg['train_together']:
+                rgb_actor = deepcopy(actor_critic.actor)
+            else:
+                rgb_actor = None
         else:
             rgb_encoder = None
             rgb_actor = None
@@ -151,6 +153,9 @@ class OnPolicyRunner:
         
         if self.if_depth and not self.if_rgb:
             self.learn = self.learn_vision
+            self.num_learning_iterations = 20001
+        elif self.if_depth and self.if_rgb:
+            self.learn = self.learn_rgb_depth_together_vision
             self.num_learning_iterations = 20001
         elif self.if_rgb:
             self.learn = self.learn_rgb_vision
@@ -574,7 +579,7 @@ class OnPolicyRunner:
 
             for i in range(self.depth_encoder_cfg["num_steps_per_env"]):
 
-                if infos[train_type]:
+                if infos[train_type] != None:
                     with torch.no_grad():
                         scandots_latent = self.alg.actor_critic.actor.infer_scandots_latent(obs)
                     scandots_latent_buffer.append(scandots_latent)
@@ -653,7 +658,7 @@ class OnPolicyRunner:
             actions_student_buffer = torch.cat(actions_student_buffer, dim=0)
             yaw_buffer_student = torch.cat(yaw_buffer_student, dim=0)
             yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
-            depth_actor_loss, yaw_loss = self.alg.update_depth_actor(actions_student_buffer, actions_teacher_buffer, yaw_buffer_student, yaw_buffer_teacher)
+            depth_actor_loss, yaw_loss = self.alg.update_depth_actor(actions_student_buffer, actions_teacher_buffer, yaw_buffer_student, yaw_buffer_teacher, additional_loss = dual_encoder_loss)
 
             # depth_encoder_loss, depth_actor_loss = self.alg.update_depth_both(depth_latent_buffer, scandots_latent_buffer, actions_student_buffer, actions_teacher_buffer)
             stop = time.time()
@@ -835,9 +840,13 @@ class OnPolicyRunner:
         fps = int(self.num_steps_per_env * self.env.num_envs / (locs['collection_time'] + locs['learn_time']))
 
         wandb_dict['Loss_depth/delta_yaw_ok_percent'] = locs['delta_yaw_ok_percentage']
-        wandb_dict['Loss_depth/depth_encoder'] = locs['depth_encoder_loss']
+        if 'dual_encoder_loss' in locs:
+            wandb_dict['Loss_depth/dual_encoder'] = locs['dual_encoder_loss']
+        else:
+            wandb_dict['Loss_depth/depth_encoder'] = locs['depth_encoder_loss']
         wandb_dict['Loss_depth/depth_actor'] = locs['depth_actor_loss']
-        wandb_dict['Loss_depth/rgb_actor'] = locs['rgb_actor_loss']
+        if 'rgb_encoder_loss' in locs:
+            wandb_dict['Loss_depth/rgb_actor'] = locs['rgb_actor_loss']
         wandb_dict['Loss_depth/yaw'] = locs['yaw_loss']
         wandb_dict['Policy/mean_noise_std'] = mean_std.item()
         wandb_dict['Perf/total_fps'] = fps
@@ -856,7 +865,10 @@ class OnPolicyRunner:
         
 
         str = f" \033[1m Learning iteration {locs['it']}/{self.current_learning_iteration + locs['num_learning_iterations']} \033[0m "
-
+        if 'dual_encoder_loss' in locs:
+            enc_str = f"""{'Depth encoder loss:':>{pad}} {locs['dual_encoder_loss']:.4f}\n"""
+        else:
+           enc_str = f"""{'Depth encoder loss:':>{pad}} {locs['depth_encoder_loss']:.4f}\n"""
         if len(locs['rewbuffer']) > 0:
             log_string = (f"""{'#' * width}\n"""
                           f"""{str.center(width, ' ')}\n\n"""
@@ -867,7 +879,7 @@ class OnPolicyRunner:
                           f"""{'Mean reward (total):':>{pad}} {statistics.mean(locs['rewbuffer']):.2f}\n"""
                           f"""{'Mean episode length:':>{pad}} {statistics.mean(locs['lenbuffer']):.2f}\n"""
                           f"""{'Mean episode waypoints:':>{pad}} {np.mean(np.array(locs['num_waypoints_buffer']).astype(float)/7.0):.2f}\n"""
-                          f"""{'Depth encoder loss:':>{pad}} {locs['depth_encoder_loss']:.4f}\n"""
+                          f"{enc_str}"
                           f"""{'Depth actor loss:':>{pad}} {locs['depth_actor_loss']:.4f}\n"""
                           f"""{'Yaw loss:':>{pad}} {locs['yaw_loss']:.4f}\n"""
                           f"""{'Delta yaw ok percentage:':>{pad}} {locs['delta_yaw_ok_percentage']:.4f}\n""")
@@ -1138,12 +1150,14 @@ class OnPolicyRunner:
             else:
                 print("Saved rgb encoder detected, loading...")
                 self.alg.rgb_encoder.load_state_dict(loaded_dict['rgb_encoder_state_dict'])
-            if 'rgb_actor_state_dict' in loaded_dict:
-                print("Saved rgb actor detected, loading...")
-                self.alg.rgb_actor.load_state_dict(loaded_dict['rgb_actor_state_dict'])
-            else:
-                print("No saved rgb actor, Copying actor critic actor to rgb actor...")
-                self.alg.rgb_actor.load_state_dict(self.alg.actor_critic.actor.state_dict())
+            
+            if not self.depth_encoder_cfg['train_together']:
+                if 'rgb_actor_state_dict' in loaded_dict:
+                    print("Saved rgb actor detected, loading...")
+                    self.alg.rgb_actor.load_state_dict(loaded_dict['rgb_actor_state_dict'])
+                else:
+                    print("No saved rgb actor, Copying actor critic actor to rgb actor...")
+                    self.alg.rgb_actor.load_state_dict(self.alg.actor_critic.actor.state_dict())
 
         if load_optimizer:
             self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])

@@ -212,6 +212,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
         if args.debug:
             env_cfg.terrain.num_cols = 20
             env_cfg.env.num_envs = 4
+            # env_cfg.terrain.border_size = 0
     if cfg_train is not None:
         if args.seed is not None:
             cfg_train.seed = args.seed
@@ -246,6 +247,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.depth_encoder.big_encoder = True
         if args.liquid_nn:
             cfg_train.depth_encoder.liquid_nn = True
+        if args.train_together:
+            cfg_train.depth_encoder.train_together = True
 
     return env_cfg, cfg_train
 
@@ -304,6 +307,7 @@ def get_args():
         {"name": "--supercloud", "action": "store_true", "default": False, "help": "Use supercloud compute"},
         {"name": "--bigger_image", "action": "store_true", "default": False, "help": "Use bigger rgb images"},
         {"name": "--liquid_nn", "action": "store_true", "default": False, "help": "Use liquid nn"},
+        {"name": "--train_together", "action": "store_true", "default": False, "help": "Train depth and rgb phase 2 together"},
     ]
     # parse arguments
     args = parse_arguments(
