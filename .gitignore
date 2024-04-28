@@ -64,3 +64,4 @@ debug
 
 .secret.yaml
 legged_gym/logs/parkour_new
+legged_gym/experiment/mesh_generation/parkour_meshes/sep
