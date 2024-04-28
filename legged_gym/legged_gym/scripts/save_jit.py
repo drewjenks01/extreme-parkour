@@ -31,7 +31,7 @@ def get_load_path(root, load_run=-1, checkpoint=-1, model_name_include="model"):
     load_path = os.path.join(root, model)
     return load_path, checkpoint
 
-class HardwareVisionNN(nn.Module):
+class HardwareActorNN(nn.Module):
     def __init__(self,  num_prop,
                         num_scan,
                         num_priv_latent, 
@@ -45,7 +45,7 @@ class HardwareVisionNN(nn.Module):
                         activation='elu',
                         priv_encoder_dims=[64, 20]
                         ):
-        super(HardwareVisionNN, self).__init__()
+        super(HardwareActorNN, self).__init__()
 
         self.num_prop = num_prop
         self.num_scan = num_scan
@@ -61,10 +61,66 @@ class HardwareVisionNN(nn.Module):
 
         self.estimator = Estimator(input_dim=num_prop, output_dim=num_priv_explicit, hidden_dims=[128, 64])
         
-    def forward(self, obs, depth_latent):
+    def forward(self, obs, vision_latent, vision_yaw):
+        obs[:, 6:8] = vision_yaw
         obs[:, self.num_prop+self.num_scan : self.num_prop+self.num_scan+self.num_priv_explicit] = self.estimator(obs[:, :self.num_prop])
         return self.actor(obs, hist_encoding=True, eval=False, scandots_latent=depth_latent)
-        # return obs, depth_latent
+
+class HardwareVisionNN(nn.Module):
+    def __init__(self,  num_prop,
+                        num_scan,
+                        num_priv_latent, 
+                        num_priv_explicit,
+                        num_hist,
+                        num_actions,
+                        tanh,
+                        actor_hidden_dims=[512, 256, 128],
+                        scan_encoder_dims=[128, 64, 32],
+                        depth_encoder_hidden_dim=512,
+                        activation='elu',
+                        priv_encoder_dims=[64, 20]
+                        ):
+        super(HardwareActorNN, self).__init__()
+
+        self.num_prop = num_prop
+        self.num_scan = num_scan
+        self.num_hist = num_hist
+        self.num_actions = num_actions
+        self.num_priv_latent = num_priv_latent
+        self.num_priv_explicit = num_priv_explicit
+        num_obs = num_prop + num_scan + num_hist*num_prop + num_priv_latent + num_priv_explicit
+        self.num_obs = num_obs
+        activation = get_activation(activation)
+        
+        self.actor = Actor(num_prop, num_scan, num_actions, scan_encoder_dims, actor_hidden_dims, priv_encoder_dims, num_priv_latent, num_priv_explicit, num_hist, activation, tanh_encoder_output=tanh)
+
+        self.estimator = Estimator(input_dim=num_prop, output_dim=num_priv_explicit, hidden_dims=[128, 64])
+
+         self.vision_model_type = vision_model_type
+        depth_encoder = None
+
+        if self.vision_model_type == 'depth':
+            print('Using depth backbone')
+            depth_backbone = DepthOnlyFCBackbone58x87(self.num_prop, scan_encoder_dims[-1], depth_encoder_hidden_dim)
+        
+        elif self.vision_model_type == 'rgb':
+            print('Using rgb backbone')
+            depth_backbone = RGBOnlyFCBackbone58x87(self.num_prop, scan_encoder_dims[-1],depth_encoder_hidden_dim)
+      
+        elif self.vision_model_type =='classifier':
+            print('Using depth classifier encoder')
+            depth_backbone = DepthOnlyFCBackbone58x87(self.num_prop, 32, depth_encoder_hidden_dim)
+            depth_encoder = RecurrentDepthBackboneClassifier(depth_backbone, self.num_prop)
+
+        if depth_encoder is None:
+            self.depth_encoder = RecurrentDepthBackbone(depth_backbone, self.num_prop)
+        else:
+            self.depth_encoder = depth_encoder
+        
+    def forward(self, obs, vision_latent, vision_yaw):
+        obs[:, 6:8] = vision_yaw
+        obs[:, self.num_prop+self.num_scan : self.num_prop+self.num_scan+self.num_priv_explicit] = self.estimator(obs[:, :self.num_prop])
+        return self.actor(obs, hist_encoding=True, eval=False, scandots_latent=depth_latent)
 
 def play(args):    
     load_run = "../../logs/parkour_new/" + args.exptid

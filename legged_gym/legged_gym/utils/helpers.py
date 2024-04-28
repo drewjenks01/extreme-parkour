@@ -155,6 +155,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
       
         if args.mnet_encoder:
             env_cfg.depth.mnet_encoder = True
+            env_cfg.depth.rgb_resized = (128, 128)
 
         if args.use_camera:
             env_cfg.depth.use_camera = args.use_camera
