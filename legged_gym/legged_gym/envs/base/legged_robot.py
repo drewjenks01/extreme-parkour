@@ -965,12 +965,6 @@ class LeggedRobot(BaseTask):
                                                 self.cfg.depth.resized[0]).to(self.device)
             
             if self.cfg.depth.use_rgb:
-                if self.cfg.depth.clip_encoder or self.cfg.depth.mnet_encoder:
-                    self.rgb_buffer = torch.zeros(self.num_envs,  
-                                            self.cfg.depth.buffer_len, 
-                                            3,
-                                            224, 
-                                            224).to(self.device)
 
                 if self.cfg.depth.mnet_encoder:
                     self.rgb_buffer = torch.zeros(self.num_envs,  

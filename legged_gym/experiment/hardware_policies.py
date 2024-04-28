@@ -59,6 +59,60 @@ class HardwareScandotNN(nn.Module):
         scandot_latent = self.scan_encoder(scan_dots)
         return scandot_latent
     
+class HardwareActorNN(nn.Module):
+    def __init__(   self,  
+                    num_prop,
+                    num_scan,
+                    num_priv_explicit,
+                    num_hist,
+                    vision_model_type,
+                    load_path = None,
+                    scan_encoder_dims=[128, 64, 32],
+                    depth_encoder_hidden_dim=512):
+        super(HardwareVisionNN, self).__init__()
+
+        self.num_prop = num_prop
+        self.num_scan = num_scan
+        self.num_hist = num_hist
+        self.num_priv_explicit = num_priv_explicit
+
+        if load_path is not None:
+            self.adaptation_module = torch.jit.load(load_path+"/adaptation_module_latest.jit", map_location="cpu").eval()
+            self.actor_body = torch.jit.load(load_path+"/body_latest.jit", map_location="cpu").eval()
+            self.estimator = torch.jit.load(load_path+"/estimator_latest.jit", map_location="cpu").eval()
+        else:
+            self.adaptation_module = None
+            self.actor_body = None
+            # self.estimator = None
+
+    def forward(self, obs, depth_latent, yaw):
+        obs[:, 6:8] = yaw
+        priv_explicit = self.estimator(obs[:, :self.num_prop])
+        #priv_explicit = obs[:, self.num_prop+self.num_scan:self.num_prop+self.num_scan+self.num_priv_explicit]
+        
+        observation_history = obs[:, -self.num_hist:]
+        latent = self.adaptation_module(observation_history)
+
+        obs_prop_scan = torch.cat([obs[:, :self.num_prop], depth_latent], dim=1)
+
+        backbone_input = torch.cat([obs_prop_scan, priv_explicit, latent], dim=-1)
+        backbone_output = self.actor_body(backbone_input)
+        return backbone_output 
+    
+    @torch.jit.export
+    def get_depth_latent_and_yaw(self, depth, obs):
+        depth_latent_and_yaw = self.depth_encoder(depth, obs)
+        return depth_latent_and_yaw
+    
+
+    def set_models_from_teacher(self, scandot_teacher:HardwareScandotNN):
+        self.adaptation_module = deepcopy(scandot_teacher.adaptation_module)
+        self.actor_body = deepcopy(scandot_teacher.actor_body)
+        #self.estimator = scandot_teacher.estimator
+
+
+
+
 class HardwareVisionNN(nn.Module):
     def __init__(   self,  
                     num_prop,

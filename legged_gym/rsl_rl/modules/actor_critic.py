@@ -138,7 +138,7 @@ class Actor(nn.Module):
                     # scan_encoder.append(nn.Tanh())
                     if self.use_classifier:
                         scan_encoder.append(nn.Linear(scan_encoder_dims[l], scan_encoder_dims[l+1]))
-                        scan_encoder.append(nn.Softmax())
+                        scan_encoder.append(nn.Softmax(dim=1))
                     else:
                         scan_encoder.append(nn.Linear(scan_encoder_dims[l], scan_encoder_dims[l+1]))
                         scan_encoder.append(nn.Tanh())

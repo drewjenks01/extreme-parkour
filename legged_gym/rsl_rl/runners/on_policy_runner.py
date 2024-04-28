@@ -50,6 +50,8 @@ import sys
 from copy import copy, deepcopy
 import warnings
 from wandb_osh.hooks import TriggerWandbSyncHook
+import sys
+sys.stdout.reconfigure(line_buffering=True, write_through=True)
 
 class OnPolicyRunner:
 
@@ -802,7 +804,7 @@ class OnPolicyRunner:
             yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
             rgb_actor_loss = 0
             rgb_encoder_loss, yaw_loss = self.alg.update_rgb_encoder(rgb_latent_buffer, depth_latent_buffer, yaw_buffer_student, yaw_buffer_teacher)
-            rgb_encoder_var = rgb_latent_buffer.var(dim=0).mean()
+            rgb_encoder_var = rgb_latent_buffer.var(dim=1).mean()
 
             actions_teacher_buffer = torch.cat(actions_teacher_buffer, dim=0)
             actions_student_buffer = torch.cat(actions_student_buffer, dim=0)
