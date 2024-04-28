@@ -325,7 +325,7 @@ class PPO:
 
     def update_rgb_encoder(self, rgb_latent_batch, depth_latent_batch, yaw_student_batch, yaw_teacher_batch):
         # RGB encoder ditillation
-        if self.if_depth:
+        if self.train_phase3:
             # TODO: needs to save hidden states
             rgb_encoder_loss = (depth_latent_batch.detach() - rgb_latent_batch).norm(p=2, dim=1).mean()
             yaw_loss = (yaw_teacher_batch.detach() - yaw_student_batch).norm(p=2, dim=1).mean()

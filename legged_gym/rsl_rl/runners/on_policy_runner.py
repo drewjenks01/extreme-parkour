@@ -58,7 +58,7 @@ class OnPolicyRunner:
                  train_cfg,
                  log_dir=None,
                  init_wandb=True,
-                 device='cpu', **kwargs):
+                 device='cpu', debug=False, **kwargs):
 
         self.cfg=train_cfg["runner"]
         self.alg_cfg = train_cfg["algorithm"]
@@ -67,6 +67,7 @@ class OnPolicyRunner:
         self.depth_encoder_cfg = train_cfg["depth_encoder"]
         self.device = device
         self.env = env
+        self.debug = debug
 
         print("Using MLP and Priviliged Env encoder ActorCritic structure")
         actor_critic: ActorCriticRMA = ActorCriticRMA(self.env.cfg.env.n_proprio,
@@ -154,8 +155,11 @@ class OnPolicyRunner:
         if self.if_depth and not self.if_rgb:
             self.learn = self.learn_vision
             self.num_learning_iterations = 20001
-        elif self.if_depth and self.if_rgb:
+        elif self.if_depth and self.if_rgb and not self.cfg['train_phase3']:
             self.learn = self.learn_rgb_depth_together_vision
+            self.num_learning_iterations = 20001
+        elif self.if_depth and self.if_rgb and self.cfg['train_phase3']:
+            self.learn = self.learn_rgb_vision_phase3
             self.num_learning_iterations = 20001
         elif self.if_rgb:
             self.learn = self.learn_rgb_vision
@@ -269,7 +273,7 @@ class OnPolicyRunner:
             
             stop = time.time()
             learn_time = stop - start
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log(locals())
@@ -398,7 +402,7 @@ class OnPolicyRunner:
 
             self.alg.depth_encoder.detach_hidden_states()
 
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log_vision(locals())
@@ -519,7 +523,7 @@ class OnPolicyRunner:
 
             self.alg.rgb_encoder.detach_hidden_states()
 
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log_vision(locals())
@@ -670,7 +674,7 @@ class OnPolicyRunner:
             self.alg.depth_encoder.detach_hidden_states()
             self.alg.rgb_encoder.detach_hidden_states()
 
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log_vision(locals())
@@ -683,6 +687,7 @@ class OnPolicyRunner:
             ep_infos.clear()
 
     def learn_rgb_vision_phase3(self, num_learning_iterations, init_at_random_ep_len=False):
+        print('Training phase 3')
         if self.env.cfg.env.wandb_offline:
             trigger_sync = TriggerWandbSyncHook()
             wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
@@ -706,13 +711,16 @@ class OnPolicyRunner:
         infos["delta_yaw_ok"] = torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
         # self.alg.depth_encoder.train()
         # self.alg.depth_actor.train()
+        self.alg.depth_encoder.eval()
+        self.alg.depth_actor.eval()
+        self.alg.rgb_actor.eval()
 
         # ensure actor stays the same
         self.alg.rgb_encoder.train()
         for param in self.alg.rgb_actor.parameters():
             param.requires_grad = False
 
-        num_pretrain_iter = 0
+        num_pretrain_iter = 100
         for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
             start = time.time()
             depth_latent_buffer = []
@@ -794,6 +802,7 @@ class OnPolicyRunner:
             yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
             rgb_actor_loss = 0
             rgb_encoder_loss, yaw_loss = self.alg.update_rgb_encoder(rgb_latent_buffer, depth_latent_buffer, yaw_buffer_student, yaw_buffer_teacher)
+            rgb_encoder_var = rgb_latent_buffer.var(dim=0).mean()
 
             actions_teacher_buffer = torch.cat(actions_teacher_buffer, dim=0)
             actions_student_buffer = torch.cat(actions_student_buffer, dim=0)
@@ -807,7 +816,7 @@ class OnPolicyRunner:
 
             self.alg.rgb_encoder.detach_hidden_states()
 
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log_vision_rgb(locals())
@@ -930,6 +939,7 @@ class OnPolicyRunner:
         wandb_dict['Loss_rgb/rgb_encoder'] = locs['rgb_encoder_loss']
         wandb_dict['Loss_rgb/rgb_actor'] = locs['rgb_actor_loss']
         wandb_dict['Loss_rgb/yaw'] = locs['yaw_loss']
+        wandb_dict['Loss_rgb/rgb_encoder_var'] = locs['rgb_encoder_var']
         #wandb_dict['Policy/mean_noise_std'] = mean_std.item()
         wandb_dict['Perf/total_fps'] = fps
         wandb_dict['Perf/collection time'] = locs['collection_time']
@@ -1118,6 +1128,7 @@ class OnPolicyRunner:
             print(f'Setting train state based on load path iter: {self.resume_num}')
 
         loaded_dict = torch.load(path, map_location=self.device)
+        print(loaded_dict.keys())
         self.alg.actor_critic.load_state_dict(loaded_dict['model_state_dict'])
         self.alg.estimator.load_state_dict(loaded_dict['estimator_state_dict'])
         if self.if_depth:
@@ -1133,31 +1144,23 @@ class OnPolicyRunner:
                 print("No saved depth actor, Copying actor critic actor to depth actor...")
                 self.alg.depth_actor.load_state_dict(self.alg.actor_critic.actor.state_dict())
         if self.if_rgb:
-                # try:
-                #     save_iter = int(path.split('_')[-1].replace('.pt',''))
-                #     self.resume_num = save_iter
-                # except:
-                #     self.resume_num = 0
-            #     self.alg.rgb_encoder.load_state_dict(loaded_dict['rgb_encoder_state_dict'])
-            # if 'rgb_actor_state_dict' in loaded_dict:
-            #     print("Saved rgb actor detected, loading...")
-            #     self.alg.rgb_actor.load_state_dict(loaded_dict['rgb_actor_state_dict'])
-            # else:
-            #     print("No saved rgb actor, Copying depth actor to rgb actor...")
-            #     self.alg.rgb_actor.load_state_dict(self.alg.depth_actor.state_dict())
             if 'rgb_encoder_state_dict' not in loaded_dict:
                 warnings.warn("'rgb_encoder_state_dict' key does not exist, not loading rgb encoder...")
             else:
                 print("Saved rgb encoder detected, loading...")
                 self.alg.rgb_encoder.load_state_dict(loaded_dict['rgb_encoder_state_dict'])
             
-            if not self.depth_encoder_cfg['train_together']:
+            if self.cfg['train_phase3']:
+                print('Copying depth actor to rgb actor')
+                self.alg.rgb_actor.load_state_dict(loaded_dict['depth_actor_state_dict'])
+            elif not self.depth_encoder_cfg['train_together']:
                 if 'rgb_actor_state_dict' in loaded_dict:
                     print("Saved rgb actor detected, loading...")
                     self.alg.rgb_actor.load_state_dict(loaded_dict['rgb_actor_state_dict'])
                 else:
                     print("No saved rgb actor, Copying actor critic actor to rgb actor...")
                     self.alg.rgb_actor.load_state_dict(self.alg.actor_critic.actor.state_dict())
+
 
         if load_optimizer:
             self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])

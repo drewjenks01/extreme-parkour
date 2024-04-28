@@ -149,7 +149,7 @@ class TaskRegistry():
                                 train_cfg_dict, 
                                 log_dir, 
                                 init_wandb=init_wandb,
-                                device=args.rl_device, **kwargs)
+                                device=args.rl_device, debug=args.debug, **kwargs)
         #save resume path before creating a new log_dir
         resume = train_cfg.runner.resume
         if args.resumeid:

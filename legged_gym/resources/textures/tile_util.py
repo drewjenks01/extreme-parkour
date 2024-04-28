@@ -1,8 +1,9 @@
 from PIL import Image
+from tqdm import tqdm
 
 from legged_gym import LEGGED_GYM_ROOT_DIR
 
-def create_tiled_image(image_path, tile_count_x=10, tile_count_y=10):
+def create_tiled_image(image_path, tile_count_x=5, tile_count_y=5):
     # Load the image
     original_image = Image.open(image_path)
     width, height = original_image.size
@@ -22,11 +23,11 @@ def create_tiled_image(image_path, tile_count_x=10, tile_count_y=10):
             new_image.paste(resized_image, (tile_width * x, tile_height * y))
 
     # Save the new tiled image
-    new_image.save(image_path.replace('regular', 'tiled'))
+    new_image.save(image_path.replace('regular', f'tiled_{tile_count_x}'))
 
 if __name__ == '__main__':
     import os
     image_paths = os.listdir(LEGGED_GYM_ROOT_DIR+'/resources/textures/regular')
     # image_path = 'ice_texture.jpg'  # Replace with the path to your image (PNG or JPG)
-    for image_path in image_paths:
-        create_tiled_image(LEGGED_GYM_ROOT_DIR+'/resources/textures/regular/'+image_path, tile_count_x=5, tile_count_y=5)
+    for image_path in tqdm(image_paths):
+        create_tiled_image(LEGGED_GYM_ROOT_DIR+'/resources/textures/regular/'+image_path)
