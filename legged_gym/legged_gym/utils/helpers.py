@@ -152,10 +152,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             env_cfg.env.n_priv_latent -= 4
             env_cfg.env.num_observations -= 4
 
-        if args.clip_encoder:
-            # env_cfg.depth.original = env_cfg.depth.clip_resized
-            # env_cfg.depth.resized = env_cfg.depth.clip_resized
-            env_cfg.depth.clip_encoder = True
+      
         if args.mnet_encoder:
             env_cfg.depth.mnet_encoder = True
 
@@ -211,7 +208,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
 
         if args.debug:
             env_cfg.terrain.num_cols = 20
-            env_cfg.env.num_envs = 4
+            env_cfg.env.num_envs = 1
             # env_cfg.terrain.border_size = 0
     if cfg_train is not None:
         if args.seed is not None:
@@ -237,8 +234,6 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
 
         if args.vision_classifier:
             cfg_train.policy.use_classifier = True
-        if args.clip_encoder:
-            cfg_train.depth_encoder.clip_encoder = True
         if args.mnet_encoder:
             cfg_train.depth_encoder.mnet_encoder = True
         if 'phase3' in args.exptid:

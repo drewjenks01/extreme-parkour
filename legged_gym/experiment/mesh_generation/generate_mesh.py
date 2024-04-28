@@ -22,6 +22,9 @@ def generate_rectangular_prism(vertices, triangles, filepath):
     texture_vertices = generate_texture_coordinates(vertices, 100)
     with open(filepath, 'w') as f:
         # Write vertices
+        f.write('# Blender 3.1.2\n')
+        f.write('# www.blender.org\n')
+        f.write('mtllib rectangular_prism_bumps_whole.mtl\n')
         for vertex in vertices:
             f.write("v {} {} {}\n".format(vertex[0], vertex[1], vertex[2]))
         
