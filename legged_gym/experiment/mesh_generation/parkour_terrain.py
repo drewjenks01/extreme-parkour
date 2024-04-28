@@ -42,29 +42,49 @@ from scipy.ndimage import binary_dilation
 class Cfg:
     # set a dummy config
     def __init__(self):
-        self.terrain_proportions = [0.0] * 14 + [0.2, 0.2, 0.2, 0.2, 0.2]
-        self.terrain_length = 10
-        self.terrain_width = 5
+        self.terrain_dict = {"smooth slope": 0., 
+                        "rough slope up": 0.0,
+                        "rough slope down": 0.0,
+                        "rough stairs up": 0., 
+                        "rough stairs down": 0., 
+                        "discrete": 0., 
+                        "stepping stones": 0.0,
+                        "gaps": 0., 
+                        "smooth flat": 0,
+                        "pit": 0.0,
+                        "wall": 0.0,
+                        "platform": 0.,
+                        "large stairs up": 0.,
+                        "large stairs down": 0.,
+                        "parkour": 0.2,
+                        "parkour_hurdle": 0.2,
+                        "parkour_flat": 0.05,
+                        "parkour_step": 0.2,
+                        "parkour_gap": 0.2,
+                        "demo": 0.15,}
+        self.terrain_proportions = list(self.terrain_dict.values())
+        self.terrain_length = 18
+        self.terrain_width = 4
         self.num_rows = 10
-        self.num_cols = 10
-        self.num_goals = 5
+        self.num_cols = 20
+        self.num_goals = 8
         self.horizontal_scale = 0.1
         self.vertical_scale = 0.005
-        self.height = [0.0, 0.05]
-        self.gap_size = [0.1, 0.2]
-        self.border_size = 1
-        self.origin_zero_z = False
+        self.height = [0.02, 0.06]
+        self.gap_size = [0.02, 0.08]
+        self.border_size = 5
+        self.origin_zero_z = True
         self.all_vertical = False
         self.flat_wall = False
         self.mesh_type = "trimesh"
         self.curriculum = True
-        self.downsampled_scale = 1
-        self.y_range = [-1.2, 1.2]
-        self.selected = True
+        self.downsampled_scale = 0.075
+        self.y_range = [-0.1, 0.1]
+        self.selected = False
         self.hf2mesh_method = "grid"
-        self.slope_treshold = 0.1
-        self.edge_width_thresh = 0.1
-        self.simplify_grid = False
+        self.slope_treshold = 1.5
+        self.edge_width_thresh = 0.05
+        self.simplify_grid = True
         
 
 
@@ -122,7 +142,7 @@ class Terrain:
                     mesh_simplifier.setMesh(self.vertices, self.triangles)
                     mesh_simplifier.simplify_mesh(target_count = int(0.05*self.triangles.shape[0]), aggressiveness=7, preserve_border=True, verbose=10)
 
-                    self.vertices, self.triangles, normals = mesh_simplifier.getMesh()
+                    self.vertices, self.triangles, self.normals = mesh_simplifier.getMesh()
                     self.vertices = self.vertices.astype(np.float32)
                     self.triangles = self.triangles.astype(np.uint32)
             else:

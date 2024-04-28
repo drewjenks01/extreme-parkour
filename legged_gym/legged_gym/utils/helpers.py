@@ -134,17 +134,17 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             args.use_camera = True
             args.resume = True
 
-        # elif 'phase3' in args.exptid:
-        #     print('Using phase3 settings')
-        #     args.delay = True
-        #     args.use_camera = True
-        #     args.resume = True
-        #     args.use_rgb = True
+        elif 'phase3' in args.exptid:
+            print('Using phase3 settings')
+            args.delay = True
+            args.use_camera = True
+            args.resume = True
+            args.use_rgb = True
 
-        #     if args.bigger_image:
-        #         env_cfg.depth.original = (640, 480)
-        #         env_cfg.depth.rgb_resized = (256, 256)
-        #         env_cfg.depth.big_encoder = True
+            if args.bigger_image:
+                env_cfg.depth.original = (640, 480)
+                env_cfg.depth.rgb_resized = (256, 256)
+                env_cfg.depth.big_encoder = True
 
         if args.contact_filt:
             print('Using contact filter')
@@ -296,18 +296,17 @@ def get_args():
         {"name": "--no_wandb", "action": "store_true", "default": False, "help": "no wandb"},
 
         # experiments
-        {"name": "--both_phases", "action": "store_true", "default": False, "help": "Trains both phases back to back"},
         {"name": "--vision_classifier", "action": "store_true", "default": False, "help": "Make vision model and scan encoder a classifier"},
         {"name": "--use_rgb", "action": "store_true", "default": False, "help": "Use RGB images instead of depth"},
         {"name": "--use_depth", "action": "store_true", "default": False, "help": "Use depth images instead of RGB"},
         {"name": "--rgb_domain_rand", "action": "store_true", "default": False, "help": "Randomize color, texture, and lighting for RGB images"},
-        {"name": "--clip_encoder", "action": "store_true", "default": False, "help": "Use pretrained CLIP vision encoder"},
         {"name": "--mnet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
         {"name": "--contact_filt", "action": "store_true", "default": False, "help": "Use original contact filter"},
         {"name": "--supercloud", "action": "store_true", "default": False, "help": "Use supercloud compute"},
         {"name": "--bigger_image", "action": "store_true", "default": False, "help": "Use bigger rgb images"},
         {"name": "--liquid_nn", "action": "store_true", "default": False, "help": "Use liquid nn"},
         {"name": "--train_together", "action": "store_true", "default": False, "help": "Train depth and rgb phase 2 together"},
+
     ]
     # parse arguments
     args = parse_arguments(

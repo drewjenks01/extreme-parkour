@@ -28,7 +28,11 @@
 #
 # Copyright (c) 2021 ETH Zurich, Nikita Rudin
 
+from audioop import reverse
 from multiprocessing.context import assert_spawning
+
+from legged_gym.utils import terrain
+from legged_gym.utils.terrain import convert_heightfield_to_trimesh
 from legged_gym import LEGGED_GYM_ROOT_DIR, envs
 from time import time
 from warnings import WarningMessage
@@ -36,6 +40,8 @@ import numpy as np
 import os
 from PIL import Image
 from torchvision.transforms import Compose, Resize, CenterCrop, Normalize
+import pyfqmr
+
 
 from isaacgym.torch_utils import *
 from isaacgym import gymtorch, gymapi, gymutil
@@ -1162,24 +1168,16 @@ class LeggedRobot(BaseTask):
         if self.cfg.domain_rand.randomize_ground_texture:
             options = gymapi.AssetOptions()
             options.fix_base_link = True
-
-            # # for each terrain section, generate a rectangular prism
-            asset_dict={}
-            print('Loading texture assets')
-            for col in tqdm(self.terrain_types):
-                if col.item() in asset_dict:
-                    continue
-                urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/sep_new'
-                loaded_asset = self.gym.load_asset(self.sim, urdf_root, f'rectangular_prism_bumps_{col}.urdf', options)
-                asset_dict[col.item()] = loaded_asset
+            filename = LEGGED_GYM_ROOT_DIR+f"/experiment/mesh_generation/parkour_meshes/sep/rectangular_prism_bumps_whole.obj"
+            generate_rectangular_prism(self.terrain.vertices, self.terrain.triangles, filename)
+            urdf_root = LEGGED_GYM_ROOT_DIR+'/experiment/mesh_generation/parkour_meshes/sep'
+            loaded_asset = self.gym.load_asset(self.sim, urdf_root, f'rectangular_prism_bumps_whole.urdf', options)
 
         print("Creating env...")
+        if self.cfg.domain_rand.randomize_ground_texture:
+            randomize_reverse = False
+
         for i in tqdm(range(self.num_envs)):
-
-            if self.cfg.domain_rand.randomize_ground_texture:
-                col = self.terrain_types[i]
-                loaded_asset = asset_dict[col.item()]
-
             # create env instance
             env_handle = self.gym.create_env(self.sim, env_lower, env_upper, int(np.sqrt(self.num_envs)))
             pos = self.env_origins[i].clone()
@@ -1199,25 +1197,42 @@ class LeggedRobot(BaseTask):
             body_props, mass_params = self._process_rigid_body_props(body_props, i)
             self.gym.set_actor_rigid_body_properties(env_handle, anymal_handle, body_props, recomputeInertia=True)
 
-            if self.cfg.domain_rand.randomize_ground_texture:
+            if self.cfg.domain_rand.randomize_ground_texture and not randomize_reverse:
                 start_pose = gymapi.Transform()
-                start_pose.p = gymapi.Vec3(*(self.cfg.terrain.num_rows*self.cfg.terrain.terrain_length//2, col * self.cfg.terrain.terrain_width + self.cfg.terrain.terrain_width / 2, 0.03))
-                rigid_shape_props = self._process_rigid_shape_props(rigid_shape_props_asset, i)
-                self.gym.set_asset_rigid_shape_properties(loaded_asset, rigid_shape_props)
+                #start_pose.p = gymapi.Vec3(*(-self.cfg.terrain.border_size, col * self.cfg.terrain.terrain_width, 0.001))
+                start_pose.p = gymapi.Vec3(*(0-self.cfg.terrain.border_size, 0-self.cfg.terrain.border_size, 0.0))
                 ground_handle = self.gym.create_actor(env_handle, loaded_asset, start_pose, "ground", -1, -1)
-                self.ground_handles.append(ground_handle)
+                rand_texture = np.random.randint(0, len(self.textures))
+                self.gym.set_rigid_body_texture(env_handle, ground_handle, 0, gymapi.MeshType.MESH_VISUAL, self.textures[rand_texture])
 
+                self.ground_handles.append(ground_handle)
+                self.ground_actor_idxs.append(self.gym.get_actor_index(env_handle, ground_handle, gymapi.DOMAIN_SIM))
+            
             self.envs.append(env_handle)
             self.actor_handles.append(anymal_handle)
             self.robot_actor_idxs.append(self.gym.get_actor_index(env_handle, anymal_handle, gymapi.DOMAIN_SIM))
-            self.ground_actor_idxs.append(self.gym.get_actor_index(env_handle, ground_handle, gymapi.DOMAIN_SIM))
-            
             self.attach_camera(i, env_handle, anymal_handle)
 
             self.mass_params_tensor[i, :] = torch.from_numpy(mass_params).to(self.device).to(torch.float)
         
+        
+        if self.cfg.domain_rand.randomize_ground_texture and randomize_reverse:
+            # only used for proper visualization of texture+rgb image
+            for i in range(self.num_envs-1, -1, -1):
+                env_handle = self.envs[i]
+                start_pose = gymapi.Transform()
+                #start_pose.p = gymapi.Vec3(*(-self.cfg.terrain.border_size, col * self.cfg.terrain.terrain_width, 0.001))
+                start_pose.p = gymapi.Vec3(*(0-self.cfg.terrain.border_size, 0-self.cfg.terrain.border_size, 0.0))
+                ground_handle = self.gym.create_actor(env_handle, loaded_asset, start_pose, "ground", -1, -1)
+                rand_texture = np.random.randint(0, len(self.textures))
+                self.gym.set_rigid_body_texture(env_handle, ground_handle, 0, gymapi.MeshType.MESH_VISUAL, self.textures[rand_texture])
+
+                self.ground_handles.append(ground_handle)
+                self.ground_actor_idxs.append(self.gym.get_actor_index(env_handle, ground_handle, gymapi.DOMAIN_SIM))
+        
         self.robot_actor_idxs = torch.Tensor(self.robot_actor_idxs).to(device=self.device,dtype=torch.long)
-        self.ground_actor_idxs = torch.Tensor(self.ground_actor_idxs).to(device=self.device,dtype=torch.long)
+        if self.cfg.domain_rand.randomize_ground_texture:
+            self.ground_actor_idxs = torch.Tensor(self.ground_actor_idxs).to(device=self.device,dtype=torch.long)
         if self.cfg.domain_rand.randomize_friction:
             self.friction_coeffs_tensor = self.friction_coeffs.to(self.device).to(torch.float).squeeze(-1)
 

@@ -58,7 +58,7 @@ class OnPolicyRunner:
                  train_cfg,
                  log_dir=None,
                  init_wandb=True,
-                 device='cpu', **kwargs):
+                 device='cpu', debug=False, **kwargs):
 
         self.cfg=train_cfg["runner"]
         self.alg_cfg = train_cfg["algorithm"]
@@ -67,6 +67,7 @@ class OnPolicyRunner:
         self.depth_encoder_cfg = train_cfg["depth_encoder"]
         self.device = device
         self.env = env
+        self.debug = debug
 
         print("Using MLP and Priviliged Env encoder ActorCritic structure")
         actor_critic: ActorCriticRMA = ActorCriticRMA(self.env.cfg.env.n_proprio,
@@ -154,8 +155,11 @@ class OnPolicyRunner:
         if self.if_depth and not self.if_rgb:
             self.learn = self.learn_vision
             self.num_learning_iterations = 20001
-        elif self.if_depth and self.if_rgb:
+        elif self.if_depth and self.if_rgb and not self.cfg.train_phase3:
             self.learn = self.learn_rgb_depth_together_vision
+            self.num_learning_iterations = 20001
+        elif self.if_depth and self.if_rgb and self.cfg.train_phase3:
+            self.learn = self.learn_rgb_vision_phase3
             self.num_learning_iterations = 20001
         elif self.if_rgb:
             self.learn = self.learn_rgb_vision
@@ -269,7 +273,7 @@ class OnPolicyRunner:
             
             stop = time.time()
             learn_time = stop - start
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log(locals())
@@ -398,7 +402,7 @@ class OnPolicyRunner:
 
             self.alg.depth_encoder.detach_hidden_states()
 
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log_vision(locals())
@@ -519,7 +523,7 @@ class OnPolicyRunner:
 
             self.alg.rgb_encoder.detach_hidden_states()
 
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log_vision(locals())
@@ -667,7 +671,7 @@ class OnPolicyRunner:
             self.alg.depth_encoder.detach_hidden_states()
             self.alg.rgb_encoder.detach_hidden_states()
 
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log_vision(locals())
@@ -680,6 +684,7 @@ class OnPolicyRunner:
             ep_infos.clear()
 
     def learn_rgb_vision_phase3(self, num_learning_iterations, init_at_random_ep_len=False):
+        print('Training phase 3')
         if self.env.cfg.env.wandb_offline:
             trigger_sync = TriggerWandbSyncHook()
             wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
@@ -703,6 +708,9 @@ class OnPolicyRunner:
         infos["delta_yaw_ok"] = torch.ones(self.env.num_envs, dtype=torch.bool, device=self.device)
         # self.alg.depth_encoder.train()
         # self.alg.depth_actor.train()
+        self.alg.depth_encoder.eval()
+        self.alg.depth_actor.eval()
+        self.alg.rgb_actor.eval()
 
         # ensure actor stays the same
         self.alg.rgb_encoder.train()
@@ -804,7 +812,7 @@ class OnPolicyRunner:
 
             self.alg.rgb_encoder.detach_hidden_states()
 
-            if self.save_video_interval:
+            if self.save_video_interval and not self.debug:
                 self.log_video(it)
             if self.log_dir is not None:
                 self.log_vision_rgb(locals())
@@ -1158,6 +1166,7 @@ class OnPolicyRunner:
                 else:
                     print("No saved rgb actor, Copying actor critic actor to rgb actor...")
                     self.alg.rgb_actor.load_state_dict(self.alg.actor_critic.actor.state_dict())
+
 
         if load_optimizer:
             self.alg.optimizer.load_state_dict(loaded_dict['optimizer_state_dict'])
