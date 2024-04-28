@@ -603,8 +603,10 @@ class OnPolicyRunner:
 
                     if train_type == 'depth':
                         yaw = depth_yaw
+                        vision_latent = depth_latent
                     elif train_type == 'rgb':
                         yaw = rgb_yaw
+                        vision_latent = rgb_latent
 
                     yaw_buffer_student.append(yaw)
                     yaw_buffer_teacher.append(obs[:, 6:8])
@@ -617,7 +619,7 @@ class OnPolicyRunner:
                 # obs_student[:, 6:8] = yaw.detach()
                 obs_student[infos["delta_yaw_ok"], 6:8] = yaw.detach()[infos["delta_yaw_ok"]]
                 delta_yaw_ok_buffer.append(torch.nonzero(infos["delta_yaw_ok"]).size(0) / infos["delta_yaw_ok"].numel())
-                actions_student = self.alg.depth_actor(obs_student, hist_encoding=True, scandots_latent=depth_latent)
+                actions_student = self.alg.depth_actor(obs_student, hist_encoding=True, scandots_latent=vision_latent)
                 actions_student_buffer.append(actions_student)
 
                 # detach actions before feeding the env
@@ -650,6 +652,7 @@ class OnPolicyRunner:
             scandots_latent_buffer = torch.cat(scandots_latent_buffer, dim=0)
             depth_latent_buffer = torch.cat(depth_latent_buffer, dim=0)
             rgb_latent_buffer = torch.cat(rgb_latent_buffer, dim=0)
+            rgb_encoder_var = rgb_latent_buffer.var(dim=0).mean()
 
             dual_encoder_loss = self.alg.update_both_encoders(depth_latent_buffer, rgb_latent_buffer)
             # depth_encoder_loss = self.alg.update_depth_encoder(depth_latent_buffer, scandots_latent_buffer)
@@ -842,6 +845,7 @@ class OnPolicyRunner:
         wandb_dict['Loss_depth/delta_yaw_ok_percent'] = locs['delta_yaw_ok_percentage']
         if 'dual_encoder_loss' in locs:
             wandb_dict['Loss_depth/dual_encoder'] = locs['dual_encoder_loss']
+            wandb_dict['Loss_depth/rgb_encoder_var'] = locs['rgb_encoder_var']
         else:
             wandb_dict['Loss_depth/depth_encoder'] = locs['depth_encoder_loss']
         wandb_dict['Loss_depth/depth_actor'] = locs['depth_actor_loss']
@@ -866,7 +870,7 @@ class OnPolicyRunner:
 
         str = f" \033[1m Learning iteration {locs['it']}/{self.current_learning_iteration + locs['num_learning_iterations']} \033[0m "
         if 'dual_encoder_loss' in locs:
-            enc_str = f"""{'Depth encoder loss:':>{pad}} {locs['dual_encoder_loss']:.4f}\n"""
+            enc_str = f"""{'Dual encoder loss:':>{pad}} {locs['dual_encoder_loss']:.4f}\n"""
         else:
            enc_str = f"""{'Depth encoder loss:':>{pad}} {locs['depth_encoder_loss']:.4f}\n"""
         if len(locs['rewbuffer']) > 0:
@@ -1129,10 +1133,6 @@ class OnPolicyRunner:
                 print("No saved depth actor, Copying actor critic actor to depth actor...")
                 self.alg.depth_actor.load_state_dict(self.alg.actor_critic.actor.state_dict())
         if self.if_rgb:
-            if 'rgb_encoder_state_dict' not in loaded_dict:
-                warnings.warn("'rgb_encoder_state_dict' key does not exist, not loading rgb encoder...")
-            else:
-                print("Saved rgb encoder detected, loading...")
                 # try:
                 #     save_iter = int(path.split('_')[-1].replace('.pt',''))
                 #     self.resume_num = save_iter
