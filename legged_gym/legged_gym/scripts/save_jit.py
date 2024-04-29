@@ -96,7 +96,7 @@ class HardwareVisionNN(nn.Module):
 
         self.estimator = Estimator(input_dim=num_prop, output_dim=num_priv_explicit, hidden_dims=[128, 64])
 
-         self.vision_model_type = vision_model_type
+        self.vision_model_type = vision_model_type
         depth_encoder = None
 
         if self.vision_model_type == 'depth':

@@ -111,6 +111,7 @@ def play(args):
     env_cfg.domain_rand.push_interval_s = 6
     env_cfg.domain_rand.randomize_base_mass = False
     env_cfg.domain_rand.randomize_base_com = False
+    env_cfg.env.eval = True
 
     depth_latent_buffer = []
     # prepare environment
