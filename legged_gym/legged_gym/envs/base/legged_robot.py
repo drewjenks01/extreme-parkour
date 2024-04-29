@@ -264,7 +264,7 @@ class LeggedRobot(BaseTask):
         for i in range(self.num_envs):
             rgb_image_ = self.gym.get_camera_image_gpu_tensor(self.sim, 
                                                                 self.envs[i], 
-                                                                self.cam_handles[i],
+                                                                self.rgb_cam_handles[i],
                                                                 gymapi.IMAGE_COLOR)
             
             rgb_image = gymtorch.wrap_tensor(rgb_image_)
@@ -1058,7 +1058,7 @@ class LeggedRobot(BaseTask):
 
 
     def attach_camera(self, i, env_handle, actor_handle):
-        if self.cfg.depth.use_camera:
+        if self.cfg.depth.use_depth:
             config = self.cfg.depth
             camera_props = gymapi.CameraProperties()
             camera_props.width = self.cfg.depth.original[0]
@@ -1080,6 +1080,31 @@ class LeggedRobot(BaseTask):
             root_handle = self.gym.get_actor_root_rigid_body_handle(env_handle, actor_handle)
             
             self.gym.attach_camera_to_body(camera_handle, env_handle, root_handle, local_transform, gymapi.FOLLOW_TRANSFORM)
+
+        if self.cfg.depth.use_rgb:
+            config = self.cfg.depth
+            camera_props = gymapi.CameraProperties()
+            camera_props.width = self.cfg.depth.original[0]
+            camera_props.height = self.cfg.depth.original[1]
+            camera_props.enable_tensors = True
+            camera_horizontal_fov = self.cfg.depth.rgb_horizontal_fov 
+            camera_props.horizontal_fov = camera_horizontal_fov
+
+            camera_handle = self.gym.create_camera_sensor(env_handle, camera_props)
+            self.rgb_cam_handles.append(camera_handle)
+            
+            local_transform = gymapi.Transform()
+            
+            camera_position = np.copy(config.position)
+            camera_angle = np.random.uniform(config.angle[0], config.angle[1])
+            
+            local_transform.p = gymapi.Vec3(*camera_position)
+            local_transform.r = gymapi.Quat.from_euler_zyx(0, np.radians(camera_angle), 0)
+            root_handle = self.gym.get_actor_root_rigid_body_handle(env_handle, actor_handle)
+            
+            self.gym.attach_camera_to_body(camera_handle, env_handle, root_handle, local_transform, gymapi.FOLLOW_TRANSFORM)
+
+        
 
     def _create_envs(self):
         """ Creates environments:
@@ -1156,6 +1181,7 @@ class LeggedRobot(BaseTask):
         self.envs = []
         self.ground_handles = []
         self.cam_handles = []
+        self.rgb_cam_handles = []
         self.cam_tensors = []
         self.mass_params_tensor = torch.zeros(self.num_envs, 4, dtype=torch.float, device=self.device, requires_grad=False)
 

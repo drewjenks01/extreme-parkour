@@ -49,9 +49,11 @@ from rsl_rl.env import VecEnv
 import sys
 from copy import copy, deepcopy
 import warnings
+import wandb_osh
 from wandb_osh.hooks import TriggerWandbSyncHook
 import sys
 sys.stdout.reconfigure(line_buffering=True, write_through=True)
+wandb_osh.set_log_level("ERROR")
 
 class OnPolicyRunner:
 
@@ -722,7 +724,7 @@ class OnPolicyRunner:
         for param in self.alg.rgb_actor.parameters():
             param.requires_grad = False
 
-        num_pretrain_iter = 100
+        num_pretrain_iter = tot_iter
         for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
             start = time.time()
             depth_latent_buffer = []
@@ -742,8 +744,8 @@ class OnPolicyRunner:
                     depth_yaw = 1.5*depth_latent_and_yaw[:, -2:]
                     
                     depth_latent_buffer.append(depth_latent)
-                    yaw_buffer_teacher.append(depth_yaw)
-                    #yaw_buffer_teacher.append(obs[:, 6:8])
+                    #yaw_buffer_teacher.append(depth_yaw)
+                    yaw_buffer_teacher.append(obs[:, 6:8])
                     
                     # rgb student
                     obs_prop_rgb = obs[:, :self.env.cfg.env.n_proprio].clone()
@@ -759,6 +761,7 @@ class OnPolicyRunner:
                 
                 with torch.no_grad():
                     actions_teacher = self.alg.depth_actor(obs, hist_encoding=True, scandots_latent=depth_latent)
+                    #actions_teacher = self.alg.actor_critic.act_inference(obs, hist_encoding=True, scandots_latent=None)
                     actions_teacher_buffer.append(actions_teacher)
 
                 obs_student = obs.clone()
