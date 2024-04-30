@@ -92,7 +92,7 @@ class OnPolicyRunner:
                                                     self.policy_cfg["scan_encoder_dims"][-1], 
                                                     self.depth_encoder_cfg["hidden_dims"],
                                                     )
-            depth_encoder = RecurrentDepthBackbone(depth_backbone, env.cfg).to(self.device)
+            depth_encoder = RecurrentDepthBackbone(depth_backbone, env.cfg.env.n_proprio).to(self.device)
             depth_actor = deepcopy(actor_critic.actor)
         else:
             depth_encoder = None
@@ -456,6 +456,7 @@ class OnPolicyRunner:
             delta_yaw_ok_buffer = []
             for i in range(self.depth_encoder_cfg["num_steps_per_env"]):
                 if infos["rgb"] != None:
+                    print(infos['rgb'])
                     with torch.no_grad():
                         scandots_latent = self.alg.actor_critic.actor.infer_scandots_latent(obs)
                     scandots_latent_buffer.append(scandots_latent)

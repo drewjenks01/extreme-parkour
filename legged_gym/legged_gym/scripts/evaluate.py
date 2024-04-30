@@ -28,6 +28,7 @@
 #
 # Copyright (c) 2021 ETH Zurich, Nikita Rudin
 
+from requests import get
 from legged_gym import LEGGED_GYM_ROOT_DIR
 import os
 import code
@@ -47,20 +48,6 @@ import matplotlib.pyplot as plt
 from time import time, sleep
 from legged_gym.utils import webviewer
 from tqdm import tqdm
-
-def get_load_path(root, load_run=-1, checkpoint=-1, model_name_include="model"):
-                    
-    if checkpoint==-1:
-        models = [file for file in os.listdir(root) if model_name_include in file and '.jit' not in file]
-        models.sort(key=lambda m: '{0:0>15}'.format(m))
-        model = models[-1]
-        checkpoint = model.split("_")[-1].split(".")[0]
-        # code.interact(local=locals())
-    # else:
-    #     model = "model{}_jit.pt".format(checkpoint) 
-
-    # load_path = root + model
-    return model, checkpoint
 
 def play(args):
     args.proj_name = 'final_models'
@@ -126,12 +113,18 @@ def play(args):
     train_cfg.runner.resume = True
     ppo_runner, train_cfg, log_pth = task_registry.make_alg_runner(log_root = log_pth, env=env, name=args.task, args=args, train_cfg=train_cfg, return_log_dir=True)
     
-    policy = ppo_runner.get_inference_policy(device=env.device)
-    if env.cfg.depth.use_camera:
-        if env.cfg.depth.use_rgb:
-            vision_encoder = ppo_runner.get_rgb_encoder_inference_policy(device=env.device)
-        else:
-            vision_encoder = ppo_runner.get_depth_encoder_inference_policy(device=env.device)
+    if not args.use_jit:
+        policy = ppo_runner.get_inference_policy(device=env.device)
+        if env.cfg.depth.use_camera:
+            if env.cfg.depth.use_rgb:
+                vision_encoder = ppo_runner.get_rgb_encoder_inference_policy(device=env.device)
+            else:
+                vision_encoder = ppo_runner.get_depth_encoder_inference_policy(device=env.device)
+    else:
+        jit_path = LEGGED_GYM_ROOT_DIR + f"/logs/final_models/{args.exptid}/traced/"
+        print(f'Jit path: {jit_path}')
+        policy = torch.jit.load(jit_path+'traced_actor_eval.jit', map_location=env.device).to(env.device)
+        vision_encoder = torch.jit.load(jit_path+'traced_vision_encoder_eval.jit', map_location=env.device).to(env.device)
     total_steps = 1000
     rewbuffer = deque(maxlen=total_steps)
     lenbuffer = deque(maxlen=total_steps)
@@ -158,13 +151,17 @@ def play(args):
 
         if env.cfg.depth.use_camera:
             if infos[image_type] is not None:
-                obs_student = obs[:, :env.cfg.env.n_proprio]
-                obs_student[:, 6:8] = 0
-                with torch.no_grad():
-                    vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
-                vision_latent = vision_latent_and_yaw[:, :-2]
-                yaw = vision_latent_and_yaw[:, -2:]
-            obs[:, 6:8] = 1.5*yaw
+                if args.use_jit:
+                    with torch.no_grad():
+                        vision_latent, yaw = vision_encoder(infos[image_type], obs)
+                else:
+                    obs_student = obs[:, :env.cfg.env.n_proprio]
+                    obs_student[:, 6:8] = 0
+                    with torch.no_grad():
+                        vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
+                    vision_latent = vision_latent_and_yaw[:, :-2]
+                    yaw = 1.5*vision_latent_and_yaw[:, -2:]
+            obs[:, 6:8] = yaw
                 
         else:
             vision_latent = None

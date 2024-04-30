@@ -1,4 +1,7 @@
 import os, sys
+import isaacgym
+from legged_gym.envs import *
+from legged_gym.utils import get_args, task_registry
 from statistics import mode
 sys.path.append("../../../rsl_rl")
 import torch
@@ -9,6 +12,8 @@ from rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RGBOnlyFCBac
 import argparse
 import code
 import shutil
+
+from legged_gym.utils.helpers import get_args
 
 def get_load_path(root, load_run=-1, checkpoint=-1, model_name_include="model"):
     if not os.path.isdir(root):  # use first 4 chars to mactch the run name
@@ -38,7 +43,6 @@ class HardwareActorNN(nn.Module):
                         num_priv_explicit,
                         num_hist,
                         num_actions,
-                        tanh,
                         actor_hidden_dims=[512, 256, 128],
                         scan_encoder_dims=[128, 64, 32],
                         depth_encoder_hidden_dim=512,
@@ -57,7 +61,7 @@ class HardwareActorNN(nn.Module):
         self.num_obs = num_obs
         activation = get_activation(activation)
         
-        self.actor = Actor(num_prop, num_scan, num_actions, scan_encoder_dims, actor_hidden_dims, priv_encoder_dims, num_priv_latent, num_priv_explicit, num_hist, activation, tanh_encoder_output=tanh)
+        self.actor = Actor(num_prop, num_scan, num_actions, scan_encoder_dims, actor_hidden_dims, priv_encoder_dims, num_priv_latent, num_priv_explicit, num_hist, activation)
 
         self.estimator = Estimator(input_dim=num_prop, output_dim=num_priv_explicit, hidden_dims=[128, 64])
         
@@ -65,6 +69,31 @@ class HardwareActorNN(nn.Module):
         obs[:, 6:8] = vision_yaw
         obs[:, self.num_prop+self.num_scan : self.num_prop+self.num_scan+self.num_priv_explicit] = self.estimator(obs[:, :self.num_prop])
         return self.actor(obs, hist_encoding=True, eval=False, scandots_latent=vision_latent)
+
+
+
+def load_vision_encoder(vision_type, num_prop, scan_encoder_dims, depth_encoder_hidden_dim):
+    vision_encoder = None
+    if vision_type == 'depth':
+        print('Using depth backbone')
+        vision_backbone = DepthOnlyFCBackbone58x87(num_prop, scan_encoder_dims[-1], depth_encoder_hidden_dim)
+    
+    elif vision_type == 'rgb':
+        print('Using rgb backbone')
+        vision_backbone = RGBOnlyFCBackbone58x87(num_prop, scan_encoder_dims[-1],depth_encoder_hidden_dim)
+    
+    elif vision_type =='classifier':
+        print('Using depth classifier encoder')
+        vision_backbone = DepthOnlyFCBackbone58x87(num_prop, 32, depth_encoder_hidden_dim)
+        vision_encoder = RecurrentDepthBackboneClassifier(vision_backbone, num_prop)
+
+    if vision_encoder is None:
+        vision_encoder = RecurrentDepthBackbone(vision_backbone, num_prop)
+    else:
+        vision_encoder = vision_encoder
+
+    return vision_encoder
+
 
 class HardwareVisionNN(nn.Module):
     def __init__(self,  num_prop,
@@ -96,7 +125,7 @@ class HardwareVisionNN(nn.Module):
         else:
             self.vision_encoder = vision_encoder
         
-    def forward(self, obs, vision_img):
+    def forward(self, vision_img, obs):
         obs_prop_vision = obs[:, :self.num_prop].clone()
         obs_prop_vision[:, 6:8] = 0
         vision_latent_and_yaw = self.vision_encoder(vision_img.clone(), obs_prop_vision)
@@ -125,68 +154,82 @@ def play(args):
     n_proprio = 3 + 2 + 3 + 4 + 36 + 4 +1
     history_len = 10
 
+    if args.use_depth:
+        vision_type = 'depth'
+    elif args.use_rgb:
+        vision_type = 'rgb'
+
     device = torch.device('cpu')
-    policy = HardwareActorNN(n_proprio, num_scan, n_priv_latent, n_priv_explicit, history_len, num_actions, args.tanh).to(device)
-    vision_encoder = HardwareVisionNN(n_proprio, 'rgb').to(device)
 
 
-    load_path, checkpoint = get_load_path(root=load_run, checkpoint=checkpoint)
-    load_run = os.path.dirname(load_path)
-    print(f"Loading model from: {load_path}")
-    ac_state_dict = torch.load(load_path, map_location=device)
-    # policy.load_state_dict(ac_state_dict['model_state_dict'], strict=False)
-    policy.actor.load_state_dict(ac_state_dict['rgb_actor_state_dict'], strict=True)
-    policy.estimator.load_state_dict(ac_state_dict['estimator_state_dict'])
+    for num_envs, save_name in zip((1, 192), ('robot','eval')):
 
-    vision_encoder.vision_encoder.load_state_dict(ac_state_dict['rgb_encoder_state_dict'], strict=True)
-    vision_encoder = vision_encoder.to(device)
-    
-    policy = policy.to(device)#.cpu()
-    if not os.path.exists(os.path.join(load_run, "traced")):
-        os.mkdir(os.path.join(load_run, "traced"))
-    
-    # state_dict = {'depth_encoder_state_dict': ac_state_dict['depth_encoder_state_dict']}
-    # torch.save(state_dict, os.path.join(load_run, "traced", args.exptid + "-" + str(checkpoint) + "-vision_weight.pt"))
+        policy = HardwareActorNN(n_proprio, num_scan, n_priv_latent, n_priv_explicit, history_len, num_actions).to(device)
+        #vision_encoder = HardwareVisionNN(n_proprio, vision_type).to(device)
+        vision_encoder = load_vision_encoder(vision_type, n_proprio, [128, 64, 32], 512).to(device)
 
-    # Save the traced actor
-    policy.eval()
-    with torch.no_grad(): 
-        num_envs = 1
-        
-        obs_input = torch.ones(num_envs, n_proprio + num_scan + n_priv_explicit + n_priv_latent + history_len*n_proprio, device=device)
-        depth_latent = torch.ones(1, 32, device=device)
-        depth_yaw = torch.ones(1, 2, device=device)
-        test = policy(obs_input, depth_latent, depth_yaw)
-        
-        traced_policy = torch.jit.trace(policy, (obs_input, depth_latent, depth_yaw))
-        
-        # traced_policy = torch.jit.script(policy)
-        save_path = os.path.join(load_run, "traced", args.exptid + "-" + str(checkpoint) + "-base_jit.pt")
-        traced_policy.save(save_path)
-        print("Saved traced_actor at ", os.path.abspath(save_path))
+        load_path, checkpoint = get_load_path(root=load_run, checkpoint=checkpoint)
+        load_run = os.path.dirname(load_path)
+        print(f"Loading model from: {load_path}")
+        ac_state_dict = torch.load(load_path, map_location=device)
+        # policy.load_state_dict(ac_state_dict['model_state_dict'], strict=False)
+        if vision_type == 'rgb':
+            policy.actor.load_state_dict(ac_state_dict['rgb_actor_state_dict'], strict=True)
+            #vision_encoder.vision_encoder.load_state_dict(ac_state_dict['rgb_encoder_state_dict'], strict=True)
+            vision_encoder.load_state_dict(ac_state_dict['rgb_encoder_state_dict'], strict=True)
 
-    vision_encoder.eval()
-    with torch.no_grad(): 
-        num_envs = 1
-        
-        obs_input = torch.ones(num_envs, n_proprio + num_scan + n_priv_explicit + n_priv_latent + history_len*n_proprio, device=device)
-        depth_img = torch.ones(1, 3, 58, 87, device=device)
+        elif vision_type == 'depth':
+            policy.actor.load_state_dict(ac_state_dict['depth_actor_state_dict'], strict=True)
+            #vision_encoder.vision_encoder.load_state_dict(ac_state_dict['depth_encoder_state_dict'], strict=True)
+            vision_encoder.load_state_dict(ac_state_dict['depth_encoder_state_dict'], strict=True)
 
-        test = vision_encoder(obs_input, depth_img)
+
+        policy.estimator.load_state_dict(ac_state_dict['estimator_state_dict'])
+
+        vision_encoder = vision_encoder.to(device)
         
-        traced_vision_encoder = torch.jit.script(vision_encoder, (obs_input, depth_img))
+        policy = policy.to(device)#.cpu()
+        if not os.path.exists(os.path.join(load_run, "traced")):
+            os.mkdir(os.path.join(load_run, "traced"))
         
-        # traced_policy = torch.jit.script(policy)
-        save_path = os.path.join(load_run, "traced", args.exptid + "-" + str(checkpoint) + "-vision_jit.pt")
-        traced_vision_encoder.save(save_path)
-        print("Saved traced_vision_encoder at ", os.path.abspath(save_path))
+        # state_dict = {'depth_encoder_state_dict': ac_state_dict['depth_encoder_state_dict']}
+        # torch.save(state_dict, os.path.join(load_run, "traced", args.exptid + "-" + str(checkpoint) + "-vision_weight.pt"))
+
+        # Save the traced actor
+        policy.eval()
+        vision_encoder.eval()
+        with torch.no_grad(): 
+            obs_input = torch.ones(num_envs, n_proprio + num_scan + n_priv_explicit + n_priv_latent + history_len*n_proprio, device=device)
+            depth_latent = torch.ones(num_envs, 32, device=device)
+            depth_yaw = torch.ones(num_envs, 2, device=device)
+            test = policy(obs_input, depth_latent, depth_yaw)
+            
+            traced_policy = torch.jit.trace(policy, (obs_input, depth_latent, depth_yaw))
+            
+            # traced_policy = torch.jit.script(policy)
+            save_path = os.path.join(load_run, "traced", f"traced_actor_{save_name}.jit")
+            traced_policy.save(save_path)
+            print("Saved traced_actor at ", os.path.abspath(save_path))
+
+            obs_input = torch.ones(num_envs, n_proprio, device=device)
+            if vision_type == 'depth':
+                depth_img = torch.ones(num_envs, 58, 87, device=device)
+            elif vision_type == 'rgb':
+                depth_img = torch.ones(num_envs, 3, 58, 87, device=device)
+
+            print(obs_input.shape, depth_img.shape)
+
+            test = vision_encoder(depth_img, obs_input)
+            
+            traced_vision_encoder = torch.jit.script(vision_encoder, (depth_img, obs_input))
+            
+            # traced_policy = torch.jit.script(policy)
+            save_path = os.path.join(load_run, "traced", f"traced_vision_encoder_{save_name}.jit")
+            traced_vision_encoder.save(save_path)
+            print("Saved traced_vision_encoder at ", os.path.abspath(save_path))
 
     
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--exptid', type=str)
-    parser.add_argument('--checkpoint', type=int, default=-1)
-    parser.add_argument('--tanh', action='store_true')
-    args = parser.parse_args()
+    args = get_args()
     play(args)
     
