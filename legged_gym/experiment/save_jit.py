@@ -65,10 +65,10 @@ class HardwareActorNN(nn.Module):
 
         self.estimator = Estimator(input_dim=num_prop, output_dim=num_priv_explicit, hidden_dims=[128, 64])
         
-    def forward(self, obs, vision_latent, vision_yaw):
-        obs[:, 6:8] = vision_yaw
+    def forward(self, obs, vision_latent):
         obs[:, self.num_prop+self.num_scan : self.num_prop+self.num_scan+self.num_priv_explicit] = self.estimator(obs[:, :self.num_prop])
-        return self.actor(obs, hist_encoding=True, eval=False, scandots_latent=vision_latent)
+        with torch.no_grad():
+            return self.actor(obs.detach(), hist_encoding=True, eval=False, scandots_latent=vision_latent)
 
 
 
@@ -162,7 +162,7 @@ def play(args):
     device = torch.device('cpu')
 
 
-    for num_envs, save_name in zip((1, 192), ('robot','eval')):
+    for num_envs, save_name in zip((1, 256), ('robot','eval')):
 
         policy = HardwareActorNN(n_proprio, num_scan, n_priv_latent, n_priv_explicit, history_len, num_actions).to(device)
         #vision_encoder = HardwareVisionNN(n_proprio, vision_type).to(device)
@@ -202,9 +202,9 @@ def play(args):
             obs_input = torch.ones(num_envs, n_proprio + num_scan + n_priv_explicit + n_priv_latent + history_len*n_proprio, device=device)
             depth_latent = torch.ones(num_envs, 32, device=device)
             depth_yaw = torch.ones(num_envs, 2, device=device)
-            test = policy(obs_input, depth_latent, depth_yaw)
+            test = policy(obs_input, depth_latent)
             
-            traced_policy = torch.jit.trace(policy, (obs_input, depth_latent, depth_yaw))
+            traced_policy = torch.jit.trace(policy, (obs_input, depth_latent))
             
             # traced_policy = torch.jit.script(policy)
             save_path = os.path.join(load_run, "traced", f"traced_actor_{save_name}.jit")

@@ -142,7 +142,6 @@ class LeggedRobot(BaseTask):
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
         self.post_physics_step()
 
-
         self.curr_rgb_img = torch.zeros((3,self.cfg.depth.original[1], self.cfg.depth.original[0]))
 
 
@@ -873,6 +872,11 @@ class LeggedRobot(BaseTask):
         """ Initialize torch tensors which will contain simulation states and processed quantities
         """
         # get gym GPU state tensors
+        self.rolls = []
+        self.pitches = []
+        self.ang_vel1 = []
+        self.ang_vel2 = []
+        self.ang_vel3 = []
         actor_root_state = self.gym.acquire_actor_root_state_tensor(self.sim)
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
         net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)

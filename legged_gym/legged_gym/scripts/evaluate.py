@@ -60,7 +60,7 @@ def play(args):
     # override some parameters for testing
     if args.nodelay:
         env_cfg.domain_rand.action_delay_view = 0
-    env_cfg.env.num_envs = 256
+    env_cfg.env.num_envs = 1
     env_cfg.env.episode_length_s = 20
     env_cfg.commands.resampling_time = 60
     env_cfg.terrain.num_rows = 5
@@ -74,17 +74,17 @@ def play(args):
                                     "discrete": 0., 
                                     "stepping stones": 0.0,
                                     "gaps": 0., 
-                                    "smooth flat": 0,
+                                    "smooth flat": 0.0,
                                     "pit": 0.0,
                                     "wall": 0.0,
                                     "platform": 0.,
                                     "large stairs up": 0.,
                                     "large stairs down": 0.,
-                                    "parkour": 0.25,
-                                    "parkour_hurdle": 0.25,
-                                    "parkour_flat": 0.,
-                                    "parkour_step": 0.25,
-                                    "parkour_gap": 0.25, 
+                                    "parkour": 0.,
+                                    "parkour_hurdle": 0.0,
+                                    "parkour_flat": 1.0,
+                                    "parkour_step": 0.,
+                                    "parkour_gap": 0., 
                                     "demo": 0}
     
     env_cfg.terrain.terrain_proportions = list(env_cfg.terrain.terrain_dict.values())
@@ -111,7 +111,8 @@ def play(args):
 
     # load policy
     train_cfg.runner.resume = True
-    ppo_runner, train_cfg, log_pth = task_registry.make_alg_runner(log_root = log_pth, env=env, name=args.task, args=args, train_cfg=train_cfg, return_log_dir=True)
+    if not args.use_jit:
+        ppo_runner, train_cfg, log_pth = task_registry.make_alg_runner(log_root = log_pth, env=env, name=args.task, args=args, train_cfg=train_cfg, return_log_dir=True)
     
     if not args.use_jit:
         policy = ppo_runner.get_inference_policy(device=env.device)
@@ -123,8 +124,12 @@ def play(args):
     else:
         jit_path = LEGGED_GYM_ROOT_DIR + f"/logs/final_models/{args.exptid}/traced/"
         print(f'Jit path: {jit_path}')
-        policy = torch.jit.load(jit_path+'traced_actor_eval.jit', map_location=env.device).to(env.device)
-        vision_encoder = torch.jit.load(jit_path+'traced_vision_encoder_eval.jit', map_location=env.device).to(env.device)
+        if env_cfg.env.num_envs == 1:
+            policy = torch.jit.load(jit_path+'traced_actor_robot.jit', map_location=env.device).to(env.device)
+            vision_encoder = torch.jit.load(jit_path+'traced_vision_encoder_robot.jit', map_location=env.device).to(env.device)
+        else:
+            policy = torch.jit.load(jit_path+'traced_actor_eval.jit', map_location=env.device).to(env.device)
+            vision_encoder = torch.jit.load(jit_path+'traced_vision_encoder_eval.jit', map_location=env.device).to(env.device)
     total_steps = 1000
     rewbuffer = deque(maxlen=total_steps)
     lenbuffer = deque(maxlen=total_steps)
@@ -143,38 +148,44 @@ def play(args):
     image_type = "rgb" if env.cfg.depth.use_rgb else "depth"
     
     if env.cfg.depth.use_rgb:
-        infos["rgb"] = env.rgb_buffer.clone().to(ppo_runner.device)[:, -1] if ppo_runner.if_rgb else None
+        infos["rgb"] = env.rgb_buffer.clone().to(env.device)[:, -1] if args.use_rgb else None
     else:
-        infos["depth"] = env.depth_buffer.clone().to(ppo_runner.device)[:, -1] if ppo_runner.if_depth else None
+        infos["depth"] = env.depth_buffer.clone().to(env.device)[:, -1] if args.use_depth else None
 
+    import math
     for i in tqdm(range(1500)):
+        if args.use_jit:
+            obs[:, env_cfg.env.n_proprio:env_cfg.env.n_proprio+env_cfg.env.n_scan+env_cfg.env.n_priv+env_cfg.env.n_priv_latent] = 0
+        
+        #torch.save(obs, f"ex_data/obs{i}.pt")
 
         if env.cfg.depth.use_camera:
             if infos[image_type] is not None:
-                if args.use_jit:
-                    with torch.no_grad():
-                        vision_latent, yaw = vision_encoder(infos[image_type], obs)
-                else:
-                    obs_student = obs[:, :env.cfg.env.n_proprio]
-                    obs_student[:, 6:8] = 0
-                    with torch.no_grad():
-                        vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
-                    vision_latent = vision_latent_and_yaw[:, :-2]
-                    yaw = 1.5*vision_latent_and_yaw[:, -2:]
+                np.savetxt("flat_img.txt", infos[image_type][0].cpu().numpy())
+                #torch.save(infos[image_type], f"ex_data/vision{i}.pt")
+                obs_student = obs[:, :env.cfg.env.n_proprio]
+                obs_student[:, 6:8] = 0
+                with torch.no_grad():
+                    vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
+                vision_latent = vision_latent_and_yaw[:, :-2]
+                yaw = 1.5*vision_latent_and_yaw[:, -2:]
             obs[:, 6:8] = yaw
                 
         else:
             vision_latent = None
 
-        if hasattr(ppo_runner.alg, "rgb_actor"):
+        break
+
+
+        if not args.use_jit and hasattr(ppo_runner.alg, "rgb_actor"):
             with torch.no_grad():
                 actions = ppo_runner.alg.rgb_actor(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
-        elif hasattr(ppo_runner.alg, "depth_actor"):
+        elif not args.use_jit and hasattr(ppo_runner.alg, "depth_actor"):
             with torch.no_grad():
                 actions = ppo_runner.alg.depth_actor(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
         else:
-            actions = policy(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
-            
+            actions = policy(obs.detach(), vision_latent)
+
         cur_goal_idx = env.cur_goal_idx.clone()
         obs, _, rews, dones, infos = env.step(actions.detach())
         if args.web:
