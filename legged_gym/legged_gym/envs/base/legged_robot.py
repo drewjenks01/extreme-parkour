@@ -216,6 +216,7 @@ class LeggedRobot(BaseTask):
             rgb_image = self.rgb_resize_transform(rgb_image)
         else:
             # These operations are replicated on the hardware
+            print(rgb_image.shape)
             rgb_image = rgb_image[:, :-1, 4:-1]
             # switch color channels to be first
 
@@ -501,7 +502,7 @@ class LeggedRobot(BaseTask):
 
         if self.cfg.env.contact_filt:
             obs_buf = torch.cat((#skill_vector, 
-                                self.base_ang_vel  * self.obs_scales.ang_vel,   #[1,3]
+                               0*(self.base_ang_vel  * self.obs_scales.ang_vel),   #[1,3]
                                 imu_obs,    #[1,2]
                                 0*self.delta_yaw[:, None], 
                                 self.delta_yaw[:, None],
@@ -518,7 +519,7 @@ class LeggedRobot(BaseTask):
             
         else:
             obs_buf = torch.cat((#skill_vector, 
-                                self.base_ang_vel  * self.obs_scales.ang_vel,   #[1,3]
+                                0*(self.base_ang_vel  * self.obs_scales.ang_vel),   #[1,3]
                                 imu_obs,    #[1,2]
                                 0*self.delta_yaw[:, None], 
                                 self.delta_yaw[:, None],

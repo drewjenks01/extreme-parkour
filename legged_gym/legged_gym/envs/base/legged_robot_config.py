@@ -107,7 +107,7 @@ class LeggedRobotCfg(BaseConfig):
         original = (106, 60)
         resized = (87, 58)
         horizontal_fov = 87
-        rgb_horizontal_fov = 69
+        rgb_horizontal_fov = 69.4
         buffer_len = 2
         
         near_clip = 0

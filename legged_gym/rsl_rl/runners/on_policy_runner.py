@@ -120,9 +120,9 @@ class OnPolicyRunner:
             
             if self.depth_encoder_cfg['liquid_nn']:
                 print('Using liquid nn encoder')
-                rgb_encoder = LiquidBackbone(rgb_backbone, env.cfg).to(self.device)
+                rgb_encoder = LiquidBackbone(rgb_backbone, env.cfg.env.n_proprio).to(self.device)
             else:
-                rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg).to(self.device)
+                rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg.env.n_proprio).to(self.device)
             
             if not self.depth_encoder_cfg['train_together']:
                 rgb_actor = deepcopy(actor_critic.actor)
@@ -355,7 +355,7 @@ class OnPolicyRunner:
 
                 obs_student = obs.clone()
                 # obs_student[:, 6:8] = yaw.detach()
-                obs_student[infos["delta_yaw_ok"], 6:8] = yaw.detach()[infos["delta_yaw_ok"]]
+                # obs_student[infos["delta_yaw_ok"], 6:8] = yaw.detach()[infos["delta_yaw_ok"]]
                 delta_yaw_ok_buffer.append(torch.nonzero(infos["delta_yaw_ok"]).size(0) / infos["delta_yaw_ok"].numel())
                 actions_student = self.alg.depth_actor(obs_student, hist_encoding=True, scandots_latent=depth_latent)
                 actions_student_buffer.append(actions_student)
@@ -476,7 +476,7 @@ class OnPolicyRunner:
 
                 obs_student = obs.clone()
                 # obs_student[:, 6:8] = yaw.detach()
-                obs_student[infos["delta_yaw_ok"], 6:8] = yaw.detach()[infos["delta_yaw_ok"]]
+                # obs_student[infos["delta_yaw_ok"], 6:8] = yaw.detach()[infos["delta_yaw_ok"]]
                 delta_yaw_ok_buffer.append(torch.nonzero(infos["delta_yaw_ok"]).size(0) / infos["delta_yaw_ok"].numel())
                 actions_student = self.alg.rgb_actor(obs_student, hist_encoding=True, scandots_latent=rgb_latent)
                 actions_student_buffer.append(actions_student)
