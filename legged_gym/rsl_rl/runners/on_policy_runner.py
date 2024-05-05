@@ -120,9 +120,9 @@ class OnPolicyRunner:
             
             if self.depth_encoder_cfg['liquid_nn']:
                 print('Using liquid nn encoder')
-                rgb_encoder = LiquidBackbone(rgb_backbone, env.cfg.env.n_proprio).to(self.device)
+                rgb_encoder = LiquidBackbone(rgb_backbone, self.env.cfg.env.n_proprio).to(self.device)
             else:
-                rgb_encoder = RecurrentDepthBackbone(rgb_backbone, env.cfg.env.n_proprio).to(self.device)
+                rgb_encoder = RecurrentDepthBackbone(rgb_backbone, self.env.cfg.env.n_proprio).to(self.device)
             
             if not self.depth_encoder_cfg['train_together']:
                 rgb_actor = deepcopy(actor_critic.actor)
@@ -456,6 +456,7 @@ class OnPolicyRunner:
             delta_yaw_ok_buffer = []
             for i in range(self.depth_encoder_cfg["num_steps_per_env"]):
                 if infos["rgb"] != None:
+                    print(infos['rgb'])
                     with torch.no_grad():
                         scandots_latent = self.alg.actor_critic.actor.infer_scandots_latent(obs)
                     scandots_latent_buffer.append(scandots_latent)

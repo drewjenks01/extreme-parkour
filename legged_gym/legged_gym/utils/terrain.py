@@ -292,7 +292,7 @@ class Terrain:
                                    half_valid_width=[0.45, 1],
                                    flat=True
                                    )
-            self.add_roughness(terrain)
+           # self.add_roughness(terrain)
         elif choice < self.proportions[17]:
             idx = 18
             parkour_step_terrain(terrain,

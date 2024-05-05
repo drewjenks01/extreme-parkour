@@ -60,7 +60,7 @@ def play(args):
     # override some parameters for testing
     if args.nodelay:
         env_cfg.domain_rand.action_delay_view = 0
-    env_cfg.env.num_envs = 256
+    env_cfg.env.num_envs = 1
     env_cfg.env.episode_length_s = 20
     env_cfg.commands.resampling_time = 60
     env_cfg.terrain.num_rows = 5
@@ -80,11 +80,11 @@ def play(args):
                                     "platform": 0.,
                                     "large stairs up": 0.,
                                     "large stairs down": 0.,
-                                    "parkour": 0.25,
-                                    "parkour_hurdle": 0.25,
-                                    "parkour_flat": 0.,
-                                    "parkour_step": 0.25,
-                                    "parkour_gap": 0.25, 
+                                    "parkour": 0.,
+                                    "parkour_hurdle": 0.0,
+                                    "parkour_flat": 1.0,
+                                    "parkour_step": 0.,
+                                    "parkour_gap": 0., 
                                     "demo": 0}
     
     env_cfg.terrain.terrain_proportions = list(env_cfg.terrain.terrain_dict.values())
@@ -160,6 +160,8 @@ def play(args):
 
         if env.cfg.depth.use_camera:
             if infos[image_type] is not None:
+                np.savetxt("flat_img.txt", infos[image_type][0].cpu().numpy())
+                #torch.save(infos[image_type], f"ex_data/vision{i}.pt")
                 obs_student = obs[:, :env.cfg.env.n_proprio]
                 obs_student[:, 6:8] = 0
                 with torch.no_grad():
