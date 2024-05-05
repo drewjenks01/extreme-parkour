@@ -170,7 +170,7 @@ def play(args):
                     vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
                 vision_latent = vision_latent_and_yaw[:, :-2]
                 yaw = 1.5*vision_latent_and_yaw[:, -2:]
-            obs[:, 6:8] = yaw
+            #obs[:, 6:8] = yaw
                 
         else:
             vision_latent = None

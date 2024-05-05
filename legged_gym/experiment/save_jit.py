@@ -161,6 +161,9 @@ def play(args):
 
     device = torch.device('cpu')
 
+    load_path, checkpoint = get_load_path(root=load_run, checkpoint=checkpoint)
+    load_run = os.path.dirname(load_path)
+    print(f"Loading model from: {load_path}")
 
     for num_envs, save_name in zip((1, 256), ('robot','eval')):
 
@@ -168,9 +171,6 @@ def play(args):
         #vision_encoder = HardwareVisionNN(n_proprio, vision_type).to(device)
         vision_encoder = load_vision_encoder(vision_type, n_proprio, [128, 64, 32], 512).to(device)
 
-        load_path, checkpoint = get_load_path(root=load_run, checkpoint=checkpoint)
-        load_run = os.path.dirname(load_path)
-        print(f"Loading model from: {load_path}")
         ac_state_dict = torch.load(load_path, map_location=device)
         # policy.load_state_dict(ac_state_dict['model_state_dict'], strict=False)
         if vision_type == 'rgb':

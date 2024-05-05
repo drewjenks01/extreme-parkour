@@ -172,6 +172,7 @@ class Actor(nn.Module):
             actor_layers.append(nn.Tanh())
         self.actor_backbone = nn.Sequential(*actor_layers)
 
+
     def forward(self, obs, hist_encoding: bool, eval=False, scandots_latent=None):
         if not eval:
             if self.if_scan_encode:

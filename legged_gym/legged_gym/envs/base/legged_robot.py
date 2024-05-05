@@ -1118,11 +1118,32 @@ class LeggedRobot(BaseTask):
         asset_file = os.path.basename(asset_path)
 
         if self.cfg.domain_rand.randomize_ground_texture:
-            texture_path = LEGGED_GYM_ROOT_DIR + "/resources/textures/regular/"
+            folder = 'train_tiled' if not self.cfg.env.eval else 'test_tiled'
+            texture_path = LEGGED_GYM_ROOT_DIR + f"/resources/textures/{folder}/"
             texture_files = os.listdir(texture_path)
             print(f'Loading # textures: {len(texture_files)}')
             texture_paths = [texture_path + f for f in texture_files]
+
             self.textures = [self.gym.create_texture_from_file(self.sim, texture_path) for texture_path in tqdm(texture_paths)]
+            
+            if not self.cfg.env.eval:
+                print('Adding 50 plain color textures')
+                height = 512
+                width = 512
+                # color textures
+                for i in range(50):
+                    # Generate random RGB values
+                    random_color = np.random.randint(0, 256, 3, dtype=np.uint8)
+                    alpha_values = np.ones((height, width), dtype=np.uint8)
+                    random_rgba = np.zeros((height, width, 4), dtype=np.uint8)
+                    random_rgba[:, :, :3] = random_color
+                    random_rgba[:, :, 3] = alpha_values
+                    pixel_array = random_rgba.reshape(512, -1)
+                    if i == 0:
+                        print('Color array shape:', pixel_array.shape)
+                    self.textures.append(self.gym.create_texture_from_buffer(self.sim, height, width, random_rgba))
+
+            print(f'Toal # textures used: {len(self.textures)}')
 
         asset_options = gymapi.AssetOptions()
         asset_options.default_dof_drive_mode = self.cfg.asset.default_dof_drive_mode
