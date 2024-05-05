@@ -215,15 +215,9 @@ class LeggedRobot(BaseTask):
             rgb_image = self.rgb_resize_transform(rgb_image)
         else:
             # These operations are replicated on the hardware
-            rgb_image = rgb_image[:, :-1, 4:-1]
-            # switch color channels to be first
-
-            #print(rgb_image.shape, rgb_image)
-            #rgb_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
-            #rgb_image = torch.clip(rgb_image, -self.cfg.depth.far_clip, -self.cfg.depth.near_clip)
+            rgb_image = rgb_image[:, :-2, 4:-4]
             rgb_image = self.rgb_resize_transform(rgb_image[None, :]).squeeze()
             rgb_image = rgb_image / 255.0
-            #rgb_image = self.normalize_depth_image(rgb_image)
         return rgb_image
     
     def process_depth_image(self, depth_image, env_id):

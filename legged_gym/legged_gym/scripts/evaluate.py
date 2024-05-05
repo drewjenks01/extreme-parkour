@@ -60,7 +60,7 @@ def play(args):
     # override some parameters for testing
     if args.nodelay:
         env_cfg.domain_rand.action_delay_view = 0
-    env_cfg.env.num_envs = 1
+    env_cfg.env.num_envs = 256
     env_cfg.env.episode_length_s = 20
     env_cfg.commands.resampling_time = 60
     env_cfg.terrain.num_rows = 5
@@ -80,11 +80,11 @@ def play(args):
                                     "platform": 0.,
                                     "large stairs up": 0.,
                                     "large stairs down": 0.,
-                                    "parkour": 0.,
-                                    "parkour_hurdle": 0.0,
-                                    "parkour_flat": 1.0,
-                                    "parkour_step": 0.,
-                                    "parkour_gap": 0., 
+                                    "parkour": 0.25,
+                                    "parkour_hurdle": 0.25,
+                                    "parkour_flat": 0.0,
+                                    "parkour_step": 0.25,
+                                    "parkour_gap": 0.25, 
                                     "demo": 0}
     
     env_cfg.terrain.terrain_proportions = list(env_cfg.terrain.terrain_dict.values())
@@ -99,6 +99,11 @@ def play(args):
     env_cfg.domain_rand.randomize_base_mass = False
     env_cfg.domain_rand.randomize_base_com = False
     env_cfg.env.eval = True
+
+    # TODO: UPDATE
+    env_cfg.depth.rgb_horizontal_fov = env_cfg.depth.horizontal_fov
+    env_cfg.domain_rand.randomize_lighting = True
+    env_cfg.domain_rand.randomize_ground_texture = True
 
     depth_latent_buffer = []
     # prepare environment
@@ -157,12 +162,8 @@ def play(args):
         if args.use_jit:
             obs[:, env_cfg.env.n_proprio:env_cfg.env.n_proprio+env_cfg.env.n_scan+env_cfg.env.n_priv+env_cfg.env.n_priv_latent] = 0
         
-        #torch.save(obs, f"ex_data/obs{i}.pt")
-
         if env.cfg.depth.use_camera:
             if infos[image_type] is not None:
-                np.savetxt("flat_img.txt", infos[image_type][0].cpu().numpy())
-                #torch.save(infos[image_type], f"ex_data/vision{i}.pt")
                 obs_student = obs[:, :env.cfg.env.n_proprio]
                 obs_student[:, 6:8] = 0
                 with torch.no_grad():
@@ -173,9 +174,6 @@ def play(args):
                 
         else:
             vision_latent = None
-
-        break
-
 
         if not args.use_jit and hasattr(ppo_runner.alg, "rgb_actor"):
             with torch.no_grad():

@@ -110,6 +110,10 @@ class Actor(nn.Module):
         self.use_classifier = use_classifier
 
         if self.use_classifier:
+            self.classifications = torch.zeros(1, 10, 1001)
+            self.class_iter_count = 0
+
+        if self.use_classifier:
             scan_encoder_dims[-1] = 10
             print(f'Using scan encoder classifier with {scan_encoder_dims[-1]} output dims')
 
@@ -174,6 +178,9 @@ class Actor(nn.Module):
                 obs_scan = obs[:, self.num_prop:self.num_prop + self.num_scan]
                 if scandots_latent is None:
                     scan_latent = self.scan_encoder(obs_scan)   
+                    if self.use_classifier:
+                        self.classifications[:,:,self.class_iter_count] = scan_latent.clone()
+                        self.class_iter_count+=1
                 else:
                     scan_latent = scandots_latent
                 obs_prop_scan = torch.cat([obs[:, :self.num_prop], scan_latent], dim=1)

@@ -58,10 +58,6 @@ class LeggedRobotCfg(BaseConfig):
         send_timeouts = True # send time out information to the algorithm
         episode_length_s = 20 # episode length in seconds
         obs_type = "og"
-
-
-        
-        
         
         history_encoding = True
         reorder_dofs = True
