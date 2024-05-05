@@ -43,6 +43,10 @@ class RecurrentDepthBackbone(nn.Module):
     def detach_hidden_states(self):
         self.hidden_states = self.hidden_states.detach().clone()
 
+    @torch.jit.export
+    def reset_hidden_states(self):
+        self.hidden_states[:] = 0
+
 class LiquidBackbone(nn.Module):
     def __init__(self, base_backbone, env_cfg):
         super().__init__()

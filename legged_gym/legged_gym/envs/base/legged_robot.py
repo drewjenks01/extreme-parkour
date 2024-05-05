@@ -142,7 +142,6 @@ class LeggedRobot(BaseTask):
         self.reset_idx(torch.arange(self.num_envs, device=self.device))
         self.post_physics_step()
 
-
         self.curr_rgb_img = torch.zeros((3,self.cfg.depth.original[1], self.cfg.depth.original[0]))
 
 
@@ -216,16 +215,9 @@ class LeggedRobot(BaseTask):
             rgb_image = self.rgb_resize_transform(rgb_image)
         else:
             # These operations are replicated on the hardware
-            print(rgb_image.shape)
-            rgb_image = rgb_image[:, :-1, 4:-1]
-            # switch color channels to be first
-
-            #print(rgb_image.shape, rgb_image)
-            #rgb_image += self.cfg.depth.dis_noise * 2 * (torch.rand(1)-0.5)[0]
-            #rgb_image = torch.clip(rgb_image, -self.cfg.depth.far_clip, -self.cfg.depth.near_clip)
+            rgb_image = rgb_image[:, :-2, 4:-4]
             rgb_image = self.rgb_resize_transform(rgb_image[None, :]).squeeze()
             rgb_image = rgb_image / 255.0
-            #rgb_image = self.normalize_depth_image(rgb_image)
         return rgb_image
     
     def process_depth_image(self, depth_image, env_id):
@@ -502,7 +494,7 @@ class LeggedRobot(BaseTask):
 
         if self.cfg.env.contact_filt:
             obs_buf = torch.cat((#skill_vector, 
-                               0*(self.base_ang_vel  * self.obs_scales.ang_vel),   #[1,3]
+                                self.base_ang_vel  * self.obs_scales.ang_vel,   #[1,3]
                                 imu_obs,    #[1,2]
                                 0*self.delta_yaw[:, None], 
                                 self.delta_yaw[:, None],
@@ -519,7 +511,7 @@ class LeggedRobot(BaseTask):
             
         else:
             obs_buf = torch.cat((#skill_vector, 
-                                0*(self.base_ang_vel  * self.obs_scales.ang_vel),   #[1,3]
+                                self.base_ang_vel  * self.obs_scales.ang_vel,   #[1,3]
                                 imu_obs,    #[1,2]
                                 0*self.delta_yaw[:, None], 
                                 self.delta_yaw[:, None],
@@ -874,6 +866,11 @@ class LeggedRobot(BaseTask):
         """ Initialize torch tensors which will contain simulation states and processed quantities
         """
         # get gym GPU state tensors
+        self.rolls = []
+        self.pitches = []
+        self.ang_vel1 = []
+        self.ang_vel2 = []
+        self.ang_vel3 = []
         actor_root_state = self.gym.acquire_actor_root_state_tensor(self.sim)
         dof_state_tensor = self.gym.acquire_dof_state_tensor(self.sim)
         net_contact_forces = self.gym.acquire_net_contact_force_tensor(self.sim)
@@ -1121,11 +1118,32 @@ class LeggedRobot(BaseTask):
         asset_file = os.path.basename(asset_path)
 
         if self.cfg.domain_rand.randomize_ground_texture:
-            texture_path = LEGGED_GYM_ROOT_DIR + "/resources/textures/regular/"
+            folder = 'train_tiled' if not self.cfg.env.eval else 'test_tiled'
+            texture_path = LEGGED_GYM_ROOT_DIR + f"/resources/textures/{folder}/"
             texture_files = os.listdir(texture_path)
             print(f'Loading # textures: {len(texture_files)}')
             texture_paths = [texture_path + f for f in texture_files]
+
             self.textures = [self.gym.create_texture_from_file(self.sim, texture_path) for texture_path in tqdm(texture_paths)]
+            
+            if not self.cfg.env.eval:
+                print('Adding 50 plain color textures')
+                height = 512
+                width = 512
+                # color textures
+                for i in range(50):
+                    # Generate random RGB values
+                    random_color = np.random.randint(0, 256, 3, dtype=np.uint8)
+                    alpha_values = np.ones((height, width), dtype=np.uint8)
+                    random_rgba = np.zeros((height, width, 4), dtype=np.uint8)
+                    random_rgba[:, :, :3] = random_color
+                    random_rgba[:, :, 3] = alpha_values
+                    pixel_array = random_rgba.reshape(512, -1)
+                    if i == 0:
+                        print('Color array shape:', pixel_array.shape)
+                    self.textures.append(self.gym.create_texture_from_buffer(self.sim, height, width, random_rgba))
+
+            print(f'Toal # textures used: {len(self.textures)}')
 
         asset_options = gymapi.AssetOptions()
         asset_options.default_dof_drive_mode = self.cfg.asset.default_dof_drive_mode

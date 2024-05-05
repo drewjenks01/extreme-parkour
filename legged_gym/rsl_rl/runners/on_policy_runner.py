@@ -92,7 +92,7 @@ class OnPolicyRunner:
                                                     self.policy_cfg["scan_encoder_dims"][-1], 
                                                     self.depth_encoder_cfg["hidden_dims"],
                                                     )
-            depth_encoder = RecurrentDepthBackbone(depth_backbone, env.cfg).to(self.device)
+            depth_encoder = RecurrentDepthBackbone(depth_backbone, env.cfg.env.n_proprio).to(self.device)
             depth_actor = deepcopy(actor_critic.actor)
         else:
             depth_encoder = None
@@ -444,7 +444,7 @@ class OnPolicyRunner:
         self.alg.rgb_encoder.train()
         self.alg.rgb_actor.train()
 
-        num_pretrain_iter = 100
+        num_pretrain_iter = 0
         for it in range(self.current_learning_iteration+self.resume_num, tot_iter):
             start = time.time()
             rgb_latent_buffer = []
@@ -863,7 +863,7 @@ class OnPolicyRunner:
         else:
             wandb_dict['Loss_depth/depth_encoder'] = locs['depth_encoder_loss']
         wandb_dict['Loss_depth/depth_actor'] = locs['depth_actor_loss']
-        if 'rgb_encoder_loss' in locs:
+        if 'rgb_actor_loss' in locs:
             wandb_dict['Loss_depth/rgb_actor'] = locs['rgb_actor_loss']
         wandb_dict['Loss_depth/yaw'] = locs['yaw_loss']
         wandb_dict['Policy/mean_noise_std'] = mean_std.item()
@@ -1127,7 +1127,7 @@ class OnPolicyRunner:
     def load(self, path, load_optimizer=True):
         print("*" * 80)
         print("Loading model from {}...".format(path))
-        if path.split('/')[-1] != 'model_latest.pt':
+        if "model_latest" not in path:
             save_iter = int(path.split('_')[-1].replace('.pt',''))
             self.resume_num = save_iter
             print(f'Setting train state based on load path iter: {self.resume_num}')

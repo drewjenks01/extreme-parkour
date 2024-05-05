@@ -28,6 +28,7 @@
 #
 # Copyright (c) 2021 ETH Zurich, Nikita Rudin
 
+from requests import get
 from legged_gym import LEGGED_GYM_ROOT_DIR
 import os
 import code
@@ -47,20 +48,6 @@ import matplotlib.pyplot as plt
 from time import time, sleep
 from legged_gym.utils import webviewer
 from tqdm import tqdm
-
-def get_load_path(root, load_run=-1, checkpoint=-1, model_name_include="model"):
-                    
-    if checkpoint==-1:
-        models = [file for file in os.listdir(root) if model_name_include in file and '.jit' not in file]
-        models.sort(key=lambda m: '{0:0>15}'.format(m))
-        model = models[-1]
-        checkpoint = model.split("_")[-1].split(".")[0]
-        # code.interact(local=locals())
-    # else:
-    #     model = "model{}_jit.pt".format(checkpoint) 
-
-    # load_path = root + model
-    return model, checkpoint
 
 def play(args):
     args.proj_name = 'final_models'
@@ -87,7 +74,7 @@ def play(args):
                                     "discrete": 0., 
                                     "stepping stones": 0.0,
                                     "gaps": 0., 
-                                    "smooth flat": 0,
+                                    "smooth flat": 0.0,
                                     "pit": 0.0,
                                     "wall": 0.0,
                                     "platform": 0.,
@@ -111,6 +98,7 @@ def play(args):
     env_cfg.domain_rand.push_interval_s = 6
     env_cfg.domain_rand.randomize_base_mass = False
     env_cfg.domain_rand.randomize_base_com = False
+    env_cfg.env.eval = True
 
     depth_latent_buffer = []
     # prepare environment
@@ -123,14 +111,25 @@ def play(args):
 
     # load policy
     train_cfg.runner.resume = True
-    ppo_runner, train_cfg, log_pth = task_registry.make_alg_runner(log_root = log_pth, env=env, name=args.task, args=args, train_cfg=train_cfg, return_log_dir=True)
+    if not args.use_jit:
+        ppo_runner, train_cfg, log_pth = task_registry.make_alg_runner(log_root = log_pth, env=env, name=args.task, args=args, train_cfg=train_cfg, return_log_dir=True)
     
-    policy = ppo_runner.get_inference_policy(device=env.device)
-    if env.cfg.depth.use_camera:
-        if env.cfg.depth.use_rgb:
-            vision_encoder = ppo_runner.get_rgb_encoder_inference_policy(device=env.device)
+    if not args.use_jit:
+        policy = ppo_runner.get_inference_policy(device=env.device)
+        if env.cfg.depth.use_camera:
+            if env.cfg.depth.use_rgb:
+                vision_encoder = ppo_runner.get_rgb_encoder_inference_policy(device=env.device)
+            else:
+                vision_encoder = ppo_runner.get_depth_encoder_inference_policy(device=env.device)
+    else:
+        jit_path = LEGGED_GYM_ROOT_DIR + f"/logs/final_models/{args.exptid}/traced/"
+        print(f'Jit path: {jit_path}')
+        if env_cfg.env.num_envs == 1:
+            policy = torch.jit.load(jit_path+'traced_actor_robot.jit', map_location=env.device).to(env.device)
+            vision_encoder = torch.jit.load(jit_path+'traced_vision_encoder_robot.jit', map_location=env.device).to(env.device)
         else:
-            vision_encoder = ppo_runner.get_depth_encoder_inference_policy(device=env.device)
+            policy = torch.jit.load(jit_path+'traced_actor_eval.jit', map_location=env.device).to(env.device)
+            vision_encoder = torch.jit.load(jit_path+'traced_vision_encoder_eval.jit', map_location=env.device).to(env.device)
     total_steps = 1000
     rewbuffer = deque(maxlen=total_steps)
     lenbuffer = deque(maxlen=total_steps)
@@ -149,11 +148,15 @@ def play(args):
     image_type = "rgb" if env.cfg.depth.use_rgb else "depth"
     
     if env.cfg.depth.use_rgb:
-        infos["rgb"] = env.rgb_buffer.clone().to(ppo_runner.device)[:, -1] if ppo_runner.if_rgb else None
+        infos["rgb"] = env.rgb_buffer.clone().to(env.device)[:, -1] if args.use_rgb else None
     else:
-        infos["depth"] = env.depth_buffer.clone().to(ppo_runner.device)[:, -1] if ppo_runner.if_depth else None
+        infos["depth"] = env.depth_buffer.clone().to(env.device)[:, -1] if args.use_depth else None
 
+    import math
     for i in tqdm(range(1500)):
+        if args.use_jit:
+            obs[:, env_cfg.env.n_proprio:env_cfg.env.n_proprio+env_cfg.env.n_scan+env_cfg.env.n_priv+env_cfg.env.n_priv_latent] = 0
+        
 
         if env.cfg.depth.use_camera:
             if infos[image_type] is not None:
@@ -162,21 +165,22 @@ def play(args):
                 with torch.no_grad():
                     vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
                 vision_latent = vision_latent_and_yaw[:, :-2]
-                yaw = vision_latent_and_yaw[:, -2:]
-            obs[:, 6:8] = 1.5*yaw
+                yaw = 1.5*vision_latent_and_yaw[:, -2:]
+            #obs[:, 6:8] = yaw
                 
         else:
             vision_latent = None
 
-        if hasattr(ppo_runner.alg, "rgb_actor"):
+
+        if not args.use_jit and hasattr(ppo_runner.alg, "rgb_actor"):
             with torch.no_grad():
                 actions = ppo_runner.alg.rgb_actor(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
-        elif hasattr(ppo_runner.alg, "depth_actor"):
+        elif not args.use_jit and hasattr(ppo_runner.alg, "depth_actor"):
             with torch.no_grad():
                 actions = ppo_runner.alg.depth_actor(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
         else:
-            actions = policy(obs.detach(), hist_encoding=True, scandots_latent=vision_latent)
-            
+            actions = policy(obs.detach(), vision_latent)
+
         cur_goal_idx = env.cur_goal_idx.clone()
         obs, _, rews, dones, infos = env.step(actions.detach())
         if args.web:
