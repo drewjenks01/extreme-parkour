@@ -1,5 +1,6 @@
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import sys
 import torchvision
 from ncps.torch import CfC
@@ -7,11 +8,15 @@ from ncps.wirings import AutoNCP
 
 
 class RecurrentDepthBackbone(nn.Module):
-    def __init__(self, base_backbone, num_prop) -> None:
+    def __init__(self, base_backbone, num_prop, use_l2_norm=False) -> None:
         super().__init__()
         activation = nn.ELU()
         last_activation = nn.Tanh()
         self.base_backbone = base_backbone
+        self.use_l2_norm = use_l2_norm
+        if self.use_l2_norm:
+            print('Using L2 normalization')
+
         if num_prop == None:
             self.combination_mlp = nn.Sequential(
                                     nn.Linear(32 + 53, 128),
@@ -25,6 +30,7 @@ class RecurrentDepthBackbone(nn.Module):
                                         nn.Linear(128, 32)
                                     )
         self.rnn = nn.GRU(input_size=32, hidden_size=512, batch_first=True)
+        
         self.output_mlp = nn.Sequential(
                                 nn.Linear(512, 32+2),
                                 last_activation
@@ -37,6 +43,9 @@ class RecurrentDepthBackbone(nn.Module):
         # depth_latent = self.base_backbone(depth_image)
         depth_latent, self.hidden_states = self.rnn(depth_latent[:, None, :], self.hidden_states)
         depth_latent = self.output_mlp(depth_latent.squeeze(1))
+
+        if self.use_l2_norm:
+            depth_latent = F.normalize(depth_latent, p=2, dim=1)
         
         return depth_latent
 

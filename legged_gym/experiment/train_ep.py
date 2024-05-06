@@ -91,11 +91,13 @@ def train(args):
 
     if args.debug:
         mode = "disabled"
+    else:
+        mode = "offline"
 
-    env_cfg.env.wandb_offline = True
+    env_cfg.env.wandb_offline = mode=="offline"
 
     Cfg = class_to_dict(env_cfg)
-    wandb.init(project="walk-these-ways", name=args.exptid, entity="iai-eipo", group=args.exptid[:3], mode="offline", config={'Cfg': Cfg}, dir='/data/scratch-oc40/pulkitag/awj/wandb')
+    wandb.init(project="walk-these-ways", name=args.exptid, entity="iai-eipo", group=args.exptid[:3], mode=mode, config={'Cfg': Cfg}, dir='/data/scratch-oc40/pulkitag/awj/wandb')
     wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot_config.py", policy="now")
     wandb.save(LEGGED_GYM_ENVS_DIR + "/base/legged_robot.py", policy="now")
 

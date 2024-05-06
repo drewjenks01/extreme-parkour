@@ -386,6 +386,7 @@ class LeggedRobotCfgPPO(BaseConfig):
         rnn_num_layers = 1
 
         tanh_encoder_output = False
+        use_l2_norm = False
     
     class algorithm:
         # training params

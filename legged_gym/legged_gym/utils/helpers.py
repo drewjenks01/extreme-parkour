@@ -245,6 +245,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.depth_encoder.liquid_nn = True
         if args.train_together:
             cfg_train.depth_encoder.train_together = True
+        if args.use_l2_norm:
+            cfg_train.policy.use_l2_norm = True
 
     return env_cfg, cfg_train
 
@@ -302,6 +304,8 @@ def get_args():
         {"name": "--bigger_image", "action": "store_true", "default": False, "help": "Use bigger rgb images"},
         {"name": "--liquid_nn", "action": "store_true", "default": False, "help": "Use liquid nn"},
         {"name": "--train_together", "action": "store_true", "default": False, "help": "Train depth and rgb phase 2 together"},
+        {"name": "--use_l2_norm", "action": "store_true", "default": False, "help": ""},
+
 
     ]
     # parse arguments
