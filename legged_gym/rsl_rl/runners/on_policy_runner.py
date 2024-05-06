@@ -122,7 +122,7 @@ class OnPolicyRunner:
                 print('Using liquid nn encoder')
                 rgb_encoder = LiquidBackbone(rgb_backbone, self.env.cfg.env.n_proprio).to(self.device)
             else:
-                rgb_encoder = RecurrentDepthBackbone(rgb_backbone, self.env.cfg.env.n_proprio).to(self.device)
+                rgb_encoder = RecurrentDepthBackbone(rgb_backbone, self.env.cfg.env.n_proprio, self.policy_cfg["use_l2_norm"]).to(self.device)
             
             if not self.depth_encoder_cfg['train_together']:
                 rgb_actor = deepcopy(actor_critic.actor)
