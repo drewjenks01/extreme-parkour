@@ -101,9 +101,9 @@ def play(args):
     env_cfg.env.eval = True
 
     # TODO: UPDATE
-    env_cfg.depth.rgb_horizontal_fov = env_cfg.depth.horizontal_fov
-    env_cfg.domain_rand.randomize_lighting = True
-    env_cfg.domain_rand.randomize_ground_texture = True
+    # env_cfg.depth.rgb_horizontal_fov = env_cfg.depth.horizontal_fov
+    # env_cfg.domain_rand.randomize_lighting = True
+    # env_cfg.domain_rand.randomize_ground_texture = True
 
     depth_latent_buffer = []
     # prepare environment
