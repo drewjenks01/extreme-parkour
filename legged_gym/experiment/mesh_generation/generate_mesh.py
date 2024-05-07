@@ -1,3 +1,4 @@
+
 def generate_texture_coordinates(vertices, scale_factor):
     # Calculate bounding box of the vertices
     min_x = min(vertex[0] for vertex in vertices)
@@ -19,6 +20,7 @@ def generate_texture_coordinates(vertices, scale_factor):
     return texture_vertices
 
 def generate_rectangular_prism(vertices, triangles, filepath):
+    
     texture_vertices = generate_texture_coordinates(vertices, 50)
     with open(filepath, 'w') as f:
         # Write vertices

@@ -173,6 +173,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             env_cfg.domain_rand.randomize_lighting = True
             env_cfg.domain_rand.randomize_ground_texture = True
             env_cfg.domain_rand.randomize_ground_color = False
+            if args.dr_every:
+                env_cfg.domain_rand.randomize_every = True
             #env_cfg.terrain.border_size = 0
         if env_cfg.depth.use_camera and (args.headless or args.debug) and not env_cfg.env.eval:  # set camera specific parameters
             env_cfg.env.num_envs = env_cfg.depth.camera_num_envs
@@ -305,6 +307,8 @@ def get_args():
         {"name": "--liquid_nn", "action": "store_true", "default": False, "help": "Use liquid nn"},
         {"name": "--train_together", "action": "store_true", "default": False, "help": "Train depth and rgb phase 2 together"},
         {"name": "--use_l2_norm", "action": "store_true", "default": False, "help": ""},
+        {"name": "--dr_every", "action": "store_true", "default": False, "help": ""},
+
 
 
     ]

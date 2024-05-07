@@ -700,6 +700,9 @@ class LeggedRobot(BaseTask):
         # randomize lighting every timestep
         if self.cfg.domain_rand.randomize_lighting:
             self._randomize_lighting()
+        
+        if self.cfg.domain_rand.randomize_ground_texture and self.cfg.domain_rand.randomize_every:
+            self._randomize_ground_texture(list(range(len(self.envs))))
 
     def _randomize_lighting(self):
         intensity = np.random.uniform(0.2, 0.8)
