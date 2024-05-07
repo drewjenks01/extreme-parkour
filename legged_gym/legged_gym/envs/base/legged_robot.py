@@ -30,6 +30,7 @@
 
 from audioop import reverse
 from multiprocessing.context import assert_spawning
+from tkinter import TOP
 
 from legged_gym.utils import terrain
 from legged_gym.utils.terrain import convert_heightfield_to_trimesh
@@ -58,10 +59,12 @@ from scipy.spatial.transform import Rotation as R
 import wandb
 from .legged_robot_config import LeggedRobotCfg
 from experiment.mesh_generation.generate_mesh import generate_rectangular_prism
+from torchvision.transforms import ToPILImage
 
 from tqdm import tqdm
 import cv2
 import matplotlib.pyplot as plt
+import open_clip
 
 def euler_from_quaternion(quat_angle):
         """
@@ -107,28 +110,22 @@ class LeggedRobot(BaseTask):
         self._parse_cfg(self.cfg)
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
 
-        if self.cfg.depth.clip_encoder or self.cfg.depth.mnet_encoder:
+        if self.cfg.depth.mnet_encoder:
             self.rgb_resize_transform = torchvision.transforms.Compose([
                 Resize((self.cfg.depth.mnet_resized[1], self.cfg.depth.mnet_resized[0]), 
                                                                 interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
                                                                 #CenterCrop(224),
                 Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),])
+        elif self.cfg.depth.clip_encoder:
+            self.to_pil = torchvision.transforms.ToPILImage()
+            self.rgb_resize_transform =  open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')[2]
+        else:
+            self.rgb_resize_transform = torchvision.transforms.Resize((self.cfg.depth.rgb_resized[1], self.cfg.depth.rgb_resized[0]), 
+                                                                    interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
 
         
         self.resize_transform = torchvision.transforms.Resize((self.cfg.depth.resized[1], self.cfg.depth.resized[0]), 
                                                                 interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
-
-        
-        if self.cfg.depth.big_encoder:
-            self.rgb_resize_transform = torchvision.transforms.Compose([
-                torchvision.transforms.Resize((self.cfg.depth.rgb_resized[1], self.cfg.depth.rgb_resized[0]), 
-                                                                    interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
-                CenterCrop(224)
-            ])
-        else:
-            self.rgb_resize_transform = torchvision.transforms.Resize((self.cfg.depth.rgb_resized[1], self.cfg.depth.rgb_resized[0]), 
-                                                                    interpolation=torchvision.transforms.InterpolationMode.BICUBIC)
-        
         
         if not self.headless:
             self.set_camera(self.cfg.viewer.pos, self.cfg.viewer.lookat)
@@ -210,9 +207,11 @@ class LeggedRobot(BaseTask):
         rgb_image = rgb_image[:, :, :3]
         # switch color channels to be first
         rgb_image = rgb_image.permute(2, 0, 1)
-        if self.cfg.depth.mnet_encoder or self.cfg.depth.clip_encoder:
+        if self.cfg.depth.mnet_encoder:
             rgb_image = rgb_image / 255.0
             rgb_image = self.rgb_resize_transform(rgb_image)
+        elif self.cfg.depth.clip_encoder:
+            rgb_image = self.rgb_resize_transform(self.to_pil(rgb_image)).squeeze().to(self.device)
         else:
             # These operations are replicated on the hardware
             rgb_image = rgb_image[:, :-2, 4:-4]

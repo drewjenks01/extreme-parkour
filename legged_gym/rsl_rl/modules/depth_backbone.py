@@ -5,6 +5,7 @@ import sys
 import torchvision
 from ncps.torch import CfC
 from ncps.wirings import AutoNCP
+import open_clip
 
 
 class RecurrentDepthBackbone(nn.Module):
@@ -313,6 +314,30 @@ class RGBDinoBackbone(nn.Module):
     def forward(self, images: torch.Tensor):
         with torch.no_grad():
             image_features = self.model(images)
+        latent = self.latent_compression(image_features)
+
+        return latent
+
+class RGBClipBackbone(nn.Module):
+    
+    def __init__(self, scandots_output_dim):
+        super().__init__()
+
+        self.model, _, self.preprocess = open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        activation = nn.ELU()
+        self.latent_compression = nn.Sequential(
+            activation,
+            # clip output -> latent dim
+            nn.Linear(512, scandots_output_dim)
+        )
+
+    def forward(self, images: torch.Tensor):
+        with torch.no_grad():
+            image_features = self.model.encode_image(images)
         latent = self.latent_compression(image_features)
 
         return latent

@@ -1127,7 +1127,7 @@ class OnPolicyRunner:
     def load(self, path, load_optimizer=True):
         print("*" * 80)
         print("Loading model from {}...".format(path))
-        if "model_latest" not in path:
+        if "model_latest" not in path and 'final_models' not in path:
             save_iter = int(path.split('_')[-1].replace('.pt',''))
             self.resume_num = save_iter
             print(f'Setting train state based on load path iter: {self.resume_num}')

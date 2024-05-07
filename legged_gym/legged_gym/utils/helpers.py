@@ -157,6 +157,10 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             env_cfg.depth.mnet_encoder = True
             env_cfg.depth.rgb_resized = (128, 128)
 
+        if args.clip_encoder:
+            env_cfg.depth.clip_encoder = True
+            env_cfg.depth.rgb_resized = (224, 224)
+
         if args.use_camera:
             env_cfg.depth.use_camera = args.use_camera
             if args.use_rgb:
@@ -239,6 +243,8 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.policy.use_classifier = True
         if args.mnet_encoder:
             cfg_train.depth_encoder.mnet_encoder = True
+        if args.clip_encoder:
+            cfg_train.depth_encoder.clip_encoder = True
         if 'phase3' in args.exptid:
             cfg_train.runner.train_phase3 = True
         if args.bigger_image:
@@ -301,6 +307,7 @@ def get_args():
         {"name": "--use_depth", "action": "store_true", "default": False, "help": "Use depth images instead of RGB"},
         {"name": "--rgb_domain_rand", "action": "store_true", "default": False, "help": "Randomize color, texture, and lighting for RGB images"},
         {"name": "--mnet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
+        {"name": "--clip_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
         {"name": "--contact_filt", "action": "store_true", "default": False, "help": "Use original contact filter"},
         {"name": "--supercloud", "action": "store_true", "default": False, "help": "Use supercloud compute"},
         {"name": "--bigger_image", "action": "store_true", "default": False, "help": "Use bigger rgb images"},
