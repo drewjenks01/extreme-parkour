@@ -310,7 +310,8 @@ class LeggedRobotCfg(BaseConfig):
 
         randomize_lighting = False
         randomize_ground_texture = False   
-        randomize_ground_color = False     
+        randomize_ground_color = False 
+        randomize_every = False    
     class rewards:
         class scales:
             # tracking rewards
