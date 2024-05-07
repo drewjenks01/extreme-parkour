@@ -57,12 +57,12 @@ class RecurrentDepthBackbone(nn.Module):
         self.hidden_states[:] = 0
 
 class LiquidBackbone(nn.Module):
-    def __init__(self, base_backbone, env_cfg):
+    def __init__(self, base_backbone, num_prop):
         super().__init__()
         activation = nn.ELU()
         last_activation = nn.Tanh()
         self.base_backbone = base_backbone
-        if env_cfg == None:
+        if num_prop == None:
             self.combination_mlp = nn.Sequential(
                                     nn.Linear(32 + 53, 128),
                                     activation,
@@ -70,7 +70,7 @@ class LiquidBackbone(nn.Module):
                                 )
         else:
             self.combination_mlp = nn.Sequential(
-                                        nn.Linear(32 + env_cfg.env.n_proprio, 128),
+                                        nn.Linear(32 + num_prop, 128),
                                         activation,
                                         nn.Linear(128, 32)
                                     )

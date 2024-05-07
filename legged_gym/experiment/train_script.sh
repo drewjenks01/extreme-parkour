@@ -14,5 +14,5 @@ source /data/scratch-oc40/pulkitag/awj/extreme-parkour/startup.rc
 python_script="train_ep.py"
 
 # python_args="--exptid phase2_ep_no_reindex_go1_rgb --headless --resume_path /data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/final_models/phase1_ep_no_reindex_go1/model_latest.pt --use_rgb"
-python_args="--exptid phase2_go1_no_direc_rgb_dr_l2_norm --headless --resume_path /data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/final_models/phase1_ep_no_reindex_go1/model_latest.pt --use_rgb --rgb_domain_rand --use_l2_norm"
+python_args="--exptid phase2_go1_no_direc_rgb_dr(every)_l2_norm --headless --resume_path /data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/final_models/phase1_ep_no_reindex_go1/model_latest.pt --use_rgb --rgb_domain_rand --use_l2_norm --liquid_nn"
 python -u $python_script $python_args
