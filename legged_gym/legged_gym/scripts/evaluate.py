@@ -48,6 +48,7 @@ import matplotlib.pyplot as plt
 from time import time, sleep
 from legged_gym.utils import webviewer
 from tqdm import tqdm
+from torch.nn.functional import normalize
 
 def play(args):
     args.proj_name = 'final_models'
@@ -168,6 +169,7 @@ def play(args):
                 obs_student[:, 6:8] = 0
                 with torch.no_grad():
                     vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
+                    vision_latent_and_yaw = normalize(vision_latent_and_yaw, dim=1)
                 vision_latent = vision_latent_and_yaw[:, :-2]
                 yaw = 1.5*vision_latent_and_yaw[:, -2:]
             #obs[:, 6:8] = yaw

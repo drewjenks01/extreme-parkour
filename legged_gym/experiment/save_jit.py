@@ -8,7 +8,7 @@ import torch
 import torch.nn as nn
 from rsl_rl.modules.actor_critic import Actor, StateHistoryEncoder, get_activation, ActorCriticRMA
 from rsl_rl.modules.estimator import Estimator
-from rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RGBOnlyFCBackbone58x87, RecurrentDepthBackbone, RecurrentDepthBackboneClassifier
+from rsl_rl.modules.depth_backbone import DepthOnlyFCBackbone58x87, RGBMobileNetBackbone, RGBOnlyFCBackbone58x87, RecurrentDepthBackbone, RecurrentDepthBackboneClassifier
 import argparse
 import code
 import shutil
@@ -72,7 +72,7 @@ class HardwareActorNN(nn.Module):
 
 
 
-def load_vision_encoder(vision_type, num_prop, scan_encoder_dims, depth_encoder_hidden_dim):
+def load_vision_encoder(args, vision_type, num_prop, scan_encoder_dims, depth_encoder_hidden_dim):
     vision_encoder = None
     if vision_type == 'depth':
         print('Using depth backbone')
@@ -80,7 +80,10 @@ def load_vision_encoder(vision_type, num_prop, scan_encoder_dims, depth_encoder_
     
     elif vision_type == 'rgb':
         print('Using rgb backbone')
-        vision_backbone = RGBOnlyFCBackbone58x87(num_prop, scan_encoder_dims[-1],depth_encoder_hidden_dim)
+        if args.mnet_encoder:
+            vision_backbone = RGBMobileNetBackbone(scan_encoder_dims[-1])
+        else:
+            vision_backbone = RGBOnlyFCBackbone58x87(num_prop, scan_encoder_dims[-1],depth_encoder_hidden_dim)
     
     elif vision_type =='classifier':
         print('Using depth classifier encoder')
@@ -169,7 +172,7 @@ def play(args):
 
         policy = HardwareActorNN(n_proprio, num_scan, n_priv_latent, n_priv_explicit, history_len, num_actions).to(device)
         #vision_encoder = HardwareVisionNN(n_proprio, vision_type).to(device)
-        vision_encoder = load_vision_encoder(vision_type, n_proprio, [128, 64, 32], 512).to(device)
+        vision_encoder = load_vision_encoder(args, vision_type, n_proprio, [128, 64, 32], 512).to(device)
 
         ac_state_dict = torch.load(load_path, map_location=device)
         # policy.load_state_dict(ac_state_dict['model_state_dict'], strict=False)
