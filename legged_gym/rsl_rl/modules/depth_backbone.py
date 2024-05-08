@@ -6,7 +6,9 @@ import torchvision
 from ncps.torch import CfC
 from ncps.wirings import AutoNCP
 import open_clip
-
+from torchvision.models.mobilenetv3 import mobilenet_v3_large
+from torchvision.models.efficientnet import efficientnet_b0
+from mmpretrain import get_model
 
 class RecurrentDepthBackbone(nn.Module):
     def __init__(self, base_backbone, num_prop, use_l2_norm=False) -> None:
@@ -40,14 +42,14 @@ class RecurrentDepthBackbone(nn.Module):
 
     def forward(self, depth_image, proprioception):
         depth_image = self.base_backbone(depth_image)
+        if self.use_l2_norm:
+            depth_image = F.normalize(depth_image, p=2.0, dim=1)
+
         depth_latent = self.combination_mlp(torch.cat((depth_image, proprioception), dim=-1))
         # depth_latent = self.base_backbone(depth_image)
+        self.rnn.flatten_parameters()
         depth_latent, self.hidden_states = self.rnn(depth_latent[:, None, :], self.hidden_states)
-        depth_latent = self.output_mlp(depth_latent.squeeze(1))
-
-        if self.use_l2_norm:
-            depth_latent = F.normalize(depth_latent, p=2, dim=1)
-        
+        depth_latent = self.output_mlp(depth_latent.squeeze(1))        
         return depth_latent
 
     def detach_hidden_states(self):
@@ -58,11 +60,12 @@ class RecurrentDepthBackbone(nn.Module):
         self.hidden_states[:] = 0
 
 class LiquidBackbone(nn.Module):
-    def __init__(self, base_backbone, num_prop):
+    def __init__(self, base_backbone, num_prop, use_l2_norm=False):
         super().__init__()
         activation = nn.ELU()
         last_activation = nn.Tanh()
         self.base_backbone = base_backbone
+        self.use_l2_norm = use_l2_norm
         if num_prop == None:
             self.combination_mlp = nn.Sequential(
                                     nn.Linear(32 + 53, 128),
@@ -86,6 +89,8 @@ class LiquidBackbone(nn.Module):
 
     def forward(self, depth_image, proprioception):
         depth_image = self.base_backbone(depth_image)
+        if self.use_l2_norm:
+            depth_image = F.normalize(depth_image, p=2.0, dim=1)
         depth_latent = self.combination_mlp(torch.cat((depth_image, proprioception), dim=-1))
         # depth_latent = self.base_backbone(depth_image)
         depth_latent, self.hidden_states = self.rnn(depth_latent[:, None, :], self.hidden_states)
@@ -278,16 +283,15 @@ class RGBMobileNetBackbone(nn.Module):
     def __init__(self, scandots_output_dim):
         super().__init__()
         #self.model,_ = clip.load("RN50")
-        self.model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True)
-
+        self.model = mobilenet_v3_large(pretrained=True).eval()
         self.model.classifier = nn.Sequential(
             nn.Dropout(0.2),  # Add dropout to match mnv2
-            nn.Linear(in_features=1280, out_features=scandots_output_dim),
+            nn.Linear(in_features=960, out_features=scandots_output_dim),
         )
 
         for param in self.model.parameters():
             param.requires_grad = False
-        
+
         for param in self.model.classifier.parameters():
             param.requires_grad = True
 
@@ -298,7 +302,7 @@ class RGBMobileNetBackbone(nn.Module):
 class RGBDinoBackbone(nn.Module):
     def __init__(self, scandots_output_dim):
         super().__init__()
-        self.model = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14', pretrained=True)
+        self.model = torch.hub.load('facebookresearch/dino:main', 'dino_vits8')
         self.model.eval()
 
         for param in self.model.parameters():
@@ -316,6 +320,52 @@ class RGBDinoBackbone(nn.Module):
             image_features = self.model(images)
         latent = self.latent_compression(image_features)
 
+        return latent
+
+class RGBEfficientNetBackbone(nn.Module):
+    def __init__(self, scandots_output_dim):
+        super().__init__()
+        self.model = efficientnet_b0(pretrained=True)
+        self.model.eval()
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        self.model.classifier = nn.Sequential(
+            nn.Dropout(0.2),  # Add dropout to match mnv2
+            nn.Linear(in_features=1280, out_features=scandots_output_dim),
+        )
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        for param in self.model.classifier.parameters():
+            param.requires_grad = True
+
+    def forward(self, images: torch.Tensor):
+        latent = self.model(images)
+        return latent
+    
+class RGBTinyVITNetBackbone(nn.Module):
+    def __init__(self, scandots_output_dim):
+        super().__init__()
+        self.model = get_model('levit-128_3rdparty_in1k', pretrained=True)
+        self.model.eval()
+
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+        activation = nn.ELU()
+        self.latent_compression = nn.Sequential(
+            activation,
+            # clip output -> latent dim
+            nn.Linear(384, scandots_output_dim)
+        )
+
+    def forward(self, images: torch.Tensor):
+        with torch.no_grad():
+            feats = self.model.extract_feat(images)[0]
+        latent = self.latent_compression(feats)
         return latent
 
 class RGBClipBackbone(nn.Module):

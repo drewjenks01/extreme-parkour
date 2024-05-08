@@ -155,7 +155,20 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
       
         if args.mnet_encoder:
             env_cfg.depth.mnet_encoder = True
-            env_cfg.depth.rgb_resized = (128, 128)
+            env_cfg.depth.rgb_resized = (224, 224)
+
+        if args.dino_encoder:
+            env_cfg.depth.dino_encoder = True
+            env_cfg.depth.rgb_resized = (224, 224)
+        
+        if args.enet_encoder:
+            env_cfg.depth.enet_encoder = True
+            env_cfg.depth.rgb_resized = (224, 224)
+
+        if args.tinyvit_encoder:
+            env_cfg.depth.tinyvit_encoder = True
+            env_cfg.depth.rgb_resized = (224, 224)
+
 
         if args.clip_encoder:
             env_cfg.depth.clip_encoder = True
@@ -165,6 +178,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             env_cfg.depth.use_camera = args.use_camera
             if args.use_rgb:
                 env_cfg.depth.use_rgb = args.use_rgb
+                env_cfg.depth.original = (424, 240)
             if args.use_depth:
                 env_cfg.depth.use_depth = args.use_depth
 
@@ -215,7 +229,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
 
         if args.debug:
             env_cfg.terrain.num_cols = 20
-            env_cfg.env.num_envs = 1
+            env_cfg.env.num_envs = 2
             # env_cfg.terrain.border_size = 0
     if cfg_train is not None:
         if args.seed is not None:
@@ -243,8 +257,14 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             cfg_train.policy.use_classifier = True
         if args.mnet_encoder:
             cfg_train.depth_encoder.mnet_encoder = True
+        if args.tinyvit_encoder:
+            cfg_train.depth_encoder.tinyvit_encoder = True
+        if args.dino_encoder:
+            cfg_train.depth_encoder.dino_encoder = True
         if args.clip_encoder:
             cfg_train.depth_encoder.clip_encoder = True
+        if args.enet_encoder:
+            cfg_train.depth_encoder.enet_encoder = True
         if 'phase3' in args.exptid:
             cfg_train.runner.train_phase3 = True
         if args.bigger_image:
@@ -307,6 +327,9 @@ def get_args():
         {"name": "--use_depth", "action": "store_true", "default": False, "help": "Use depth images instead of RGB"},
         {"name": "--rgb_domain_rand", "action": "store_true", "default": False, "help": "Randomize color, texture, and lighting for RGB images"},
         {"name": "--mnet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
+        {"name": "--dino_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
+        {"name": "--tinyvit_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
+        {"name": "--enet_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
         {"name": "--clip_encoder", "action": "store_true", "default": False, "help": "Use pretrained dino vision encoder"},
         {"name": "--contact_filt", "action": "store_true", "default": False, "help": "Use original contact filter"},
         {"name": "--supercloud", "action": "store_true", "default": False, "help": "Use supercloud compute"},
