@@ -105,8 +105,18 @@ class OnPolicyRunner:
                 print('Using pretrained CLIP encoder')
                 rgb_backbone = RGBClipBackbone(self.policy_cfg["scan_encoder_dims"][-1])
             elif self.depth_encoder_cfg['mnet_encoder']:
-                print('Using pretrained MobileNetV2 encoder')
+                print('Using pretrained MobileNetV3 encoder')
                 rgb_backbone = RGBMobileNetBackbone(self.policy_cfg["scan_encoder_dims"][-1])
+            elif self.depth_encoder_cfg['enet_encoder']:
+                print('Using pretrained EfficientNetb0 encoder')
+                rgb_backbone = RGBEfficientNetBackbone(self.policy_cfg["scan_encoder_dims"][-1])
+            elif self.depth_encoder_cfg['tinyvit_encoder']:
+                print('Using pretrained TinyVIT encoder')
+                rgb_backbone = RGBTinyVITNetBackbone(self.policy_cfg["scan_encoder_dims"][-1])
+            
+            elif self.depth_encoder_cfg['dino_encoder']:
+                print('Using pretrained Dino encoder')
+                rgb_backbone = RGBDinoBackbone(self.policy_cfg["scan_encoder_dims"][-1])
             
             elif self.depth_encoder_cfg['big_encoder']:
                 print('Using large rgb encoder')
@@ -118,9 +128,11 @@ class OnPolicyRunner:
                                                         num_frames=3
                                                         )
             
+            if self.policy_cfg["use_l2_norm"]:
+                print('Vision Backbone using L2 norm')
             if self.depth_encoder_cfg['liquid_nn']:
                 print('Using liquid nn encoder')
-                rgb_encoder = LiquidBackbone(rgb_backbone, self.env.cfg.env.n_proprio).to(self.device)
+                rgb_encoder = LiquidBackbone(rgb_backbone, self.env.cfg.env.n_proprio,self.policy_cfg["use_l2_norm"]).to(self.device)
             else:
                 rgb_encoder = RecurrentDepthBackbone(rgb_backbone, self.env.cfg.env.n_proprio, self.policy_cfg["use_l2_norm"]).to(self.device)
             
@@ -660,7 +672,7 @@ class OnPolicyRunner:
             scandots_latent_buffer = torch.cat(scandots_latent_buffer, dim=0)
             depth_latent_buffer = torch.cat(depth_latent_buffer, dim=0)
             rgb_latent_buffer = torch.cat(rgb_latent_buffer, dim=0)
-            rgb_encoder_var = rgb_latent_buffer.var(dim=0).mean()
+            #rgb_encoder_var = rgb_latent_buffer.var(dim=0).mean()
 
             dual_encoder_loss = self.alg.update_both_encoders(depth_latent_buffer, rgb_latent_buffer)
             # depth_encoder_loss = self.alg.update_depth_encoder(depth_latent_buffer, scandots_latent_buffer)
@@ -807,7 +819,7 @@ class OnPolicyRunner:
             yaw_buffer_teacher = torch.cat(yaw_buffer_teacher, dim=0)
             rgb_actor_loss = 0
             rgb_encoder_loss, yaw_loss = self.alg.update_rgb_encoder(rgb_latent_buffer, depth_latent_buffer, yaw_buffer_student, yaw_buffer_teacher)
-            rgb_encoder_var = rgb_latent_buffer.var(dim=1).mean()
+            # rgb_encoder_var = rgb_latent_buffer.var(dim=1).mean()
 
             actions_teacher_buffer = torch.cat(actions_teacher_buffer, dim=0)
             actions_student_buffer = torch.cat(actions_student_buffer, dim=0)
@@ -859,7 +871,7 @@ class OnPolicyRunner:
         wandb_dict['Loss_depth/delta_yaw_ok_percent'] = locs['delta_yaw_ok_percentage']
         if 'dual_encoder_loss' in locs:
             wandb_dict['Loss_depth/dual_encoder'] = locs['dual_encoder_loss']
-            wandb_dict['Loss_depth/rgb_encoder_var'] = locs['rgb_encoder_var']
+            # wandb_dict['Loss_depth/rgb_encoder_var'] = locs['rgb_encoder_var']
         else:
             wandb_dict['Loss_depth/depth_encoder'] = locs['depth_encoder_loss']
         wandb_dict['Loss_depth/depth_actor'] = locs['depth_actor_loss']
@@ -944,7 +956,7 @@ class OnPolicyRunner:
         wandb_dict['Loss_rgb/rgb_encoder'] = locs['rgb_encoder_loss']
         wandb_dict['Loss_rgb/rgb_actor'] = locs['rgb_actor_loss']
         wandb_dict['Loss_rgb/yaw'] = locs['yaw_loss']
-        wandb_dict['Loss_rgb/rgb_encoder_var'] = locs['rgb_encoder_var']
+        # wandb_dict['Loss_rgb/rgb_encoder_var'] = locs['rgb_encoder_var']
         #wandb_dict['Policy/mean_noise_std'] = mean_std.item()
         wandb_dict['Perf/total_fps'] = fps
         wandb_dict['Perf/collection time'] = locs['collection_time']

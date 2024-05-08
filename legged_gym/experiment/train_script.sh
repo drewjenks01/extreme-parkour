@@ -7,7 +7,6 @@
 #SBATCH --gres=gpu:1
 #SBATCH --ntasks=1
 #SBATCH --time=48:00:00
-#SBATCH --nodelist=improbablex002
 #SBATCH -o ./slurm_output/slurm-%j.out # STDOUT
 
 source /data/scratch-oc40/pulkitag/awj/extreme-parkour/startup.rc
@@ -15,5 +14,5 @@ source /data/scratch-oc40/pulkitag/awj/extreme-parkour/startup.rc
 python_script="train_ep.py"
 
 # python_args="--exptid phase2_ep_no_reindex_go1_rgb --headless --resume_path /data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/final_models/phase1_ep_no_reindex_go1/model_latest.pt --use_rgb"
-python_args="--exptid phase2_go1_no_direc_rgb_dr_l2_norm_clip --headless --resume_path /data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/final_models/phase1_ep_no_reindex_go1/model_latest.pt --use_rgb --rgb_domain_rand --use_l2_norm --clip_encoder"
+python_args="--exptid phase2_go1_no_direc_rgb_dr_l2_norm_mnetv3 --headless --resume_path /data/scratch-oc40/pulkitag/awj/extreme-parkour/legged_gym/logs/parkour_new/phase2_go1_no_direc_rgb_dr_l2_norm_mnetv3/model_9000.pt --use_rgb --mnet_encoder --rgb_domain_rand --use_l2_norm"
 python -u $python_script $python_args

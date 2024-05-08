@@ -116,16 +116,15 @@ class LeggedRobotCfg(BaseConfig):
 
         rgb_resized = (87, 58)
 
-        clip_resized = (224, 224)
         clip_encoder = False
 
         dino_encoder = False
-        dino_resized = (84, 56)
 
         mnet_encoder = False
-        mnet_resized = (128, 128)
 
         big_encoder = False
+        enet_encoder = False
+        tinyvit_encoder=False
 
     class normalization:
         class obs_scales:
@@ -419,10 +418,12 @@ class LeggedRobotCfgPPO(BaseConfig):
 
         clip_encoder = False
         dino_encoder = False
+        enet_encoder = False
         mnet_encoder = False
         big_encoder = False
         liquid_nn = False
         train_together = False
+        tinyvit_encoder = False
 
     class estimator:
         train_with_estimated_states = True

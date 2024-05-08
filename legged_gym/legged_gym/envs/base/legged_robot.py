@@ -111,11 +111,18 @@ class LeggedRobot(BaseTask):
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
 
         if self.cfg.depth.mnet_encoder:
-            self.rgb_resize_transform = torchvision.transforms.Compose([
-                Resize((self.cfg.depth.mnet_resized[1], self.cfg.depth.mnet_resized[0]), 
-                                                                interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
-                                                                #CenterCrop(224),
-                Normalize((0.48145466, 0.4578275, 0.40821073), (0.26862954, 0.26130258, 0.27577711)),])
+            self.rgb_resize_transform =  torchvision.transforms.Compose([
+                 torchvision.transforms.Resize(256),
+                 torchvision.transforms.CenterCrop(224),
+                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
+
+        elif self.cfg.depth.dino_encoder or self.cfg.depth.enet_encoder or self.cfg.depth.tinyvit_encoder:
+            self.rgb_resize_transform =  torchvision.transforms.Compose([
+                 torchvision.transforms.Resize(256, interpolation=3),
+                 torchvision.transforms.CenterCrop(224),
+                 torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            ])
         elif self.cfg.depth.clip_encoder:
             self.to_pil = torchvision.transforms.ToPILImage()
             self.rgb_resize_transform =  open_clip.create_model_and_transforms('ViT-B-32', pretrained='laion2b_s34b_b79k')[2]
@@ -207,7 +214,7 @@ class LeggedRobot(BaseTask):
         rgb_image = rgb_image[:, :, :3]
         # switch color channels to be first
         rgb_image = rgb_image.permute(2, 0, 1)
-        if self.cfg.depth.mnet_encoder:
+        if self.cfg.depth.mnet_encoder or self.cfg.depth.dino_encoder or self.cfg.depth.enet_encoder or self.cfg.depth.tinyvit_encoder:
             rgb_image = rgb_image / 255.0
             rgb_image = self.rgb_resize_transform(rgb_image)
         elif self.cfg.depth.clip_encoder:
@@ -966,15 +973,7 @@ class LeggedRobot(BaseTask):
             
             if self.cfg.depth.use_rgb:
 
-                if self.cfg.depth.mnet_encoder:
-                    self.rgb_buffer = torch.zeros(self.num_envs,  
-                                            self.cfg.depth.buffer_len, 
-                                            3,
-                                            self.cfg.depth.mnet_resized[1], 
-                                            self.cfg.depth.mnet_resized[0]).to(self.device)
-
-                else:
-                    self.rgb_buffer = torch.zeros(self.num_envs,  
+                self.rgb_buffer = torch.zeros(self.num_envs,  
                                                     self.cfg.depth.buffer_len, 
                                                     3,
                                                     self.cfg.depth.rgb_resized[1], 
