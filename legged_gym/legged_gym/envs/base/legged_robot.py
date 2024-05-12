@@ -112,6 +112,7 @@ class LeggedRobot(BaseTask):
 
         if self.cfg.depth.mnet_encoder:
             self.rgb_resize_transform =  torchvision.transforms.Compose([
+                 torchvision.transforms.Resize(128),
                  torchvision.transforms.Resize(256),
                  torchvision.transforms.CenterCrop(224),
                  torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
@@ -1132,7 +1133,7 @@ class LeggedRobot(BaseTask):
                 height = 512
                 width = 512
                 # color textures
-                for i in range(50):
+                for i in range(250):
                     # Generate random RGB values
                     random_color = np.random.randint(0, 256, 3, dtype=np.uint8)
                     alpha_values = np.ones((height, width), dtype=np.uint8)

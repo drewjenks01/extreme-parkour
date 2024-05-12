@@ -6,7 +6,7 @@ import torchvision
 from ncps.torch import CfC
 from ncps.wirings import AutoNCP
 import open_clip
-from torchvision.models.mobilenetv3 import mobilenet_v3_large
+# from torchvision.models.mobilenetv3 import mobilenet_v3_large
 from torchvision.models.efficientnet import efficientnet_b0
 from mmpretrain import get_model
 
@@ -47,7 +47,7 @@ class RecurrentDepthBackbone(nn.Module):
 
         depth_latent = self.combination_mlp(torch.cat((depth_image, proprioception), dim=-1))
         # depth_latent = self.base_backbone(depth_image)
-        self.rnn.flatten_parameters()
+        #self.rnn.flatten_parameters()
         depth_latent, self.hidden_states = self.rnn(depth_latent[:, None, :], self.hidden_states)
         depth_latent = self.output_mlp(depth_latent.squeeze(1))        
         return depth_latent
@@ -283,21 +283,33 @@ class RGBMobileNetBackbone(nn.Module):
     def __init__(self, scandots_output_dim):
         super().__init__()
         #self.model,_ = clip.load("RN50")
-        self.model = mobilenet_v3_large(pretrained=True).eval()
-        self.model.classifier = nn.Sequential(
-            nn.Dropout(0.2),  # Add dropout to match mnv2
-            nn.Linear(in_features=960, out_features=scandots_output_dim),
-        )
+        #self.model = mobilenet_v3_large(pretrained=True).eval()
+        # self.model.classifier = nn.Sequential(
+        #     nn.Dropout(0.2),  # Add dropout to match mnv2
+        #     nn.Linear(in_features=960, out_features=scandots_output_dim),
+        # )
+
+        self.model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True)
+        self.model.classifier = nn.Identity()
+
+         # Freeze layers up to a certain point (default: 10)
+        # for name, param in self.model.named_parameters():
+        #     if int(name.split('.')[1]) < 16:
+        #         param.requires_grad = False
 
         for param in self.model.parameters():
             param.requires_grad = False
 
-        for param in self.model.classifier.parameters():
-            param.requires_grad = True
+        self.mlp = nn.Sequential(
+            nn.Dropout(0.2),  # Add dropout to match mnv2
+            nn.Linear(in_features=1280, out_features=scandots_output_dim),
+        )
 
     def forward(self, images: torch.Tensor):
-        latent = self.model(images)
-        return latent
+        with torch.no_grad():
+            latent = self.model(images)
+        latent_compressed = self.mlp(latent)
+        return latent_compressed
     
 class RGBDinoBackbone(nn.Module):
     def __init__(self, scandots_output_dim):

@@ -1141,7 +1141,7 @@ class OnPolicyRunner:
         print("Loading model from {}...".format(path))
         if "model_latest" not in path and 'final_models' not in path:
             save_iter = int(path.split('_')[-1].replace('.pt',''))
-            self.resume_num = save_iter
+            self.resume_num = save_iter+1
             print(f'Setting train state based on load path iter: {self.resume_num}')
 
         loaded_dict = torch.load(path, map_location=self.device)
