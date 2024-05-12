@@ -169,6 +169,7 @@ def play(args):
     print(f"Loading model from: {load_path}")
 
     for num_envs, save_name in zip((1, 256), ('robot','eval')):
+        
 
         policy = HardwareActorNN(n_proprio, num_scan, n_priv_latent, n_priv_explicit, history_len, num_actions).to(device)
         #vision_encoder = HardwareVisionNN(n_proprio, vision_type).to(device)
@@ -191,7 +192,7 @@ def play(args):
 
         vision_encoder = vision_encoder.to(device)
         
-        policy = policy.to(device)#.cpu()
+        policy = policy.cpu()
         if not os.path.exists(os.path.join(load_run, "traced")):
             os.mkdir(os.path.join(load_run, "traced"))
         
@@ -199,15 +200,18 @@ def play(args):
         # torch.save(state_dict, os.path.join(load_run, "traced", args.exptid + "-" + str(checkpoint) + "-vision_weight.pt"))
 
         # Save the traced actor
+        policy_dev = torch.device('cpu')
         policy.eval()
         vision_encoder.eval()
         with torch.no_grad(): 
-            obs_input = torch.ones(num_envs, n_proprio + num_scan + n_priv_explicit + n_priv_latent + history_len*n_proprio, device=device)
-            depth_latent = torch.ones(num_envs, 32, device=device)
+            obs_input = torch.ones(num_envs, n_proprio + num_scan + n_priv_explicit + n_priv_latent + history_len*n_proprio, device=policy_dev)
+            depth_latent = torch.ones(num_envs, 32, device=policy_dev)
             depth_yaw = torch.ones(num_envs, 2, device=device)
             test = policy(obs_input, depth_latent)
             
             traced_policy = torch.jit.trace(policy, (obs_input, depth_latent))
+            traced_policy = torch.jit.freeze(traced_policy)
+            #traced_policy = torch.jit.optimize_for_inference(traced_policy)
             
             # traced_policy = torch.jit.script(policy)
             save_path = os.path.join(load_run, "traced", f"traced_actor_{save_name}.jit")
@@ -225,6 +229,8 @@ def play(args):
             test = vision_encoder(depth_img, obs_input)
             
             traced_vision_encoder = torch.jit.script(vision_encoder, (depth_img, obs_input))
+            traced_vision_encoder = torch.jit.freeze(traced_vision_encoder)
+            #traced_vision_encoder = torch.jit.optimize_for_inference(traced_vision_encoder)
             
             # traced_policy = torch.jit.script(policy)
             save_path = os.path.join(load_run, "traced", f"traced_vision_encoder_{save_name}.jit")

@@ -169,8 +169,9 @@ def play(args):
                 obs_student[:, 6:8] = 0
                 with torch.no_grad():
                     vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
-                    vision_latent_and_yaw = normalize(vision_latent_and_yaw, dim=1)
+                    #vision_latent_and_yaw = normalize(vision_latent_and_yaw, dim=1)
                 vision_latent = vision_latent_and_yaw[:, :-2]
+                print(vision_latent)
                 yaw = 1.5*vision_latent_and_yaw[:, -2:]
             #obs[:, 6:8] = yaw
                 
