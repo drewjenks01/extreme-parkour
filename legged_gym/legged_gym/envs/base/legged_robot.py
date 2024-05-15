@@ -1133,9 +1133,9 @@ class LeggedRobot(BaseTask):
                 height = 512
                 width = 512
                 # color textures
-                for i in range(250):
+                for i in range(150):
                     # Generate random RGB values
-                    random_color = np.random.randint(0, 256, 3, dtype=np.uint8)
+                    random_color = np.random.randint(1, 256, 3, dtype=np.uint8)
                     alpha_values = np.ones((height, width), dtype=np.uint8)
                     random_rgba = np.zeros((height, width, 4), dtype=np.uint8)
                     random_rgba[:, :, :3] = random_color
