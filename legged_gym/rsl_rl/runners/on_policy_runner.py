@@ -433,7 +433,7 @@ class OnPolicyRunner:
     def learn_rgb_vision(self, num_learning_iterations, init_at_random_ep_len=False):
         print('Learning phase 2 RGB')
         if self.env.cfg.env.wandb_offline:
-            trigger_sync = TriggerWandbSyncHook()
+            trigger_sync = TriggerWandbSyncHook('/data/scratch-oc40/pulkitag/awj/wandb/wandb/.wandb_osh_command_dir')
             wandb.watch(self.alg.rgb_actor, log=None, log_freq=10)
             wandb.watch(self.alg.rgb_encoder, log=None, log_freq=10)
 

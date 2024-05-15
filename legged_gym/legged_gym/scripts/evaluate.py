@@ -100,6 +100,8 @@ def play(args):
     env_cfg.domain_rand.randomize_base_com = False
     env_cfg.env.eval = True
 
+
+    
     # TODO: UPDATE
     # env_cfg.depth.rgb_horizontal_fov = env_cfg.depth.horizontal_fov
     # env_cfg.domain_rand.randomize_lighting = True
@@ -211,6 +213,8 @@ def play(args):
         cur_episode_length[new_ids] = 0
         cur_edge_violation[new_ids] = 0
         cur_time_from_start[killed_ids] = 0
+
+
     
     #compute buffer mean and std
     rew_mean = statistics.mean(rewbuffer)

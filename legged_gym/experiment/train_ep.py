@@ -92,7 +92,7 @@ def train(args):
     if args.debug:
         mode = "disabled"
     else:
-        mode = "offline"
+        mode = "online"
 
     env_cfg.env.wandb_offline = mode=="offline"
 

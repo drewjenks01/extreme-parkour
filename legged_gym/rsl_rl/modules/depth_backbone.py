@@ -289,10 +289,10 @@ class RGBMobileNetBackbone(nn.Module):
         #     nn.Linear(in_features=960, out_features=scandots_output_dim),
         # )
 
-        self.model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True)
+        self.model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True).eval()
         self.model.classifier = nn.Identity()
 
-         # Freeze layers up to a certain point (default: 10)
+         #Freeze layers up to a certain point (default: 10)
         # for name, param in self.model.named_parameters():
         #     if int(name.split('.')[1]) < 16:
         #         param.requires_grad = False
