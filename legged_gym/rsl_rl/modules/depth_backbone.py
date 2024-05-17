@@ -292,13 +292,19 @@ class RGBMobileNetBackbone(nn.Module):
         self.model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True).eval()
         self.model.classifier = nn.Identity()
 
-         #Freeze layers up to a certain point (default: 10)
-        # for name, param in self.model.named_parameters():
-        #     if int(name.split('.')[1]) < 16:
-        #         param.requires_grad = False
+        finetune = False
 
-        for param in self.model.parameters():
-            param.requires_grad = False
+         #Freeze layers up to a certain point (default: 10)
+        if finetune:
+            for name, param in self.model.named_parameters():
+                if int(name.split('.')[1]) < 16:
+                    param.requires_grad = False
+                else:
+                    param.requires_grad = True
+
+        else:
+            for param in self.model.parameters():
+                param.requires_grad = False
 
         self.mlp = nn.Sequential(
             nn.Dropout(0.2),  # Add dropout to match mnv2
@@ -306,8 +312,7 @@ class RGBMobileNetBackbone(nn.Module):
         )
 
     def forward(self, images: torch.Tensor):
-        with torch.no_grad():
-            latent = self.model(images)
+        latent = self.model(images)
         latent_compressed = self.mlp(latent)
         return latent_compressed
     
