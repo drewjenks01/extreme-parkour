@@ -111,10 +111,15 @@ class LeggedRobot(BaseTask):
         super().__init__(self.cfg, sim_params, physics_engine, sim_device, headless)
 
         if self.cfg.depth.mnet_encoder:
+            # self.rgb_resize_transform =  torchvision.transforms.Compose([
+            #      torchvision.transforms.Resize(128),
+            #      torchvision.transforms.Resize(256),
+            #      torchvision.transforms.CenterCrop(224),
+            #      torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+            # ])
             self.rgb_resize_transform =  torchvision.transforms.Compose([
-                 torchvision.transforms.Resize(128),
-                 torchvision.transforms.Resize(256),
-                 torchvision.transforms.CenterCrop(224),
+                 torchvision.transforms.Resize((128, 128), 
+                                                    interpolation=torchvision.transforms.InterpolationMode.BICUBIC),
                  torchvision.transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
             ])
 

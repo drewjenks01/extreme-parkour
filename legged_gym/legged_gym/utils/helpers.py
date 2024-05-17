@@ -142,7 +142,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             args.use_rgb = True
 
             if args.bigger_image:
-                env_cfg.depth.original = (640, 480)
+                #env_cfg.depth.original = (640, 480)
                 env_cfg.depth.rgb_resized = (256, 256)
                 env_cfg.depth.big_encoder = True
 
@@ -155,7 +155,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
       
         if args.mnet_encoder:
             env_cfg.depth.mnet_encoder = True
-            env_cfg.depth.rgb_resized = (224, 224)
+            env_cfg.depth.rgb_resized = (128, 128)
 
         if args.dino_encoder:
             env_cfg.depth.dino_encoder = True
@@ -178,7 +178,7 @@ def update_cfg_from_args(env_cfg, cfg_train, args):
             env_cfg.depth.use_camera = args.use_camera
             if args.use_rgb:
                 env_cfg.depth.use_rgb = args.use_rgb
-                env_cfg.depth.original = (424, 240)
+                env_cfg.depth.original = (87, 58)
             if args.use_depth:
                 env_cfg.depth.use_depth = args.use_depth
 
