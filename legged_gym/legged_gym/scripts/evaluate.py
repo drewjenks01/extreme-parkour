@@ -62,7 +62,7 @@ def play(args):
     # override some parameters for testing
     if args.nodelay:
         env_cfg.domain_rand.action_delay_view = 0
-    env_cfg.env.num_envs = 1
+    env_cfg.env.num_envs = 2
     env_cfg.env.episode_length_s = 20
     env_cfg.commands.resampling_time = 60
     env_cfg.terrain.num_rows = 5
@@ -82,11 +82,11 @@ def play(args):
                                     "platform": 0.,
                                     "large stairs up": 0.,
                                     "large stairs down": 0.,
-                                    "parkour": 0.0,
-                                    "parkour_hurdle": 0.0,
+                                    "parkour": 0.25,
+                                    "parkour_hurdle": 0.25,
                                     "parkour_flat": 0.0,
-                                    "parkour_step": 1.0,
-                                    "parkour_gap": 0.0, 
+                                    "parkour_step": 0.25,
+                                    "parkour_gap": 0.25, 
                                     "demo": 0}
     
     env_cfg.terrain.terrain_proportions = list(env_cfg.terrain.terrain_dict.values())
@@ -102,7 +102,7 @@ def play(args):
     env_cfg.domain_rand.randomize_base_com = False
     env_cfg.env.eval = True
 
-    record_video = True
+    record_video = False
     video_saved = False
 
     if record_video:
