@@ -32,6 +32,7 @@ from requests import get
 from legged_gym import LEGGED_GYM_ROOT_DIR
 import os
 import code
+import numpy as np
 
 import isaacgym
 from legged_gym.envs import *
@@ -48,6 +49,7 @@ import matplotlib.pyplot as plt
 from time import time, sleep
 from legged_gym.utils import webviewer
 from tqdm import tqdm
+from torch.nn.functional import normalize
 
 def play(args):
     args.proj_name = 'final_models'
@@ -60,7 +62,7 @@ def play(args):
     # override some parameters for testing
     if args.nodelay:
         env_cfg.domain_rand.action_delay_view = 0
-    env_cfg.env.num_envs = 256
+    env_cfg.env.num_envs = 1
     env_cfg.env.episode_length_s = 20
     env_cfg.commands.resampling_time = 60
     env_cfg.terrain.num_rows = 5
@@ -80,11 +82,11 @@ def play(args):
                                     "platform": 0.,
                                     "large stairs up": 0.,
                                     "large stairs down": 0.,
-                                    "parkour": 0.25,
-                                    "parkour_hurdle": 0.25,
+                                    "parkour": 0.0,
+                                    "parkour_hurdle": 0.0,
                                     "parkour_flat": 0.0,
-                                    "parkour_step": 0.25,
-                                    "parkour_gap": 0.25, 
+                                    "parkour_step": 1.0,
+                                    "parkour_gap": 0.0, 
                                     "demo": 0}
     
     env_cfg.terrain.terrain_proportions = list(env_cfg.terrain.terrain_dict.values())
@@ -100,8 +102,13 @@ def play(args):
     env_cfg.domain_rand.randomize_base_com = False
     env_cfg.env.eval = True
 
+    record_video = True
+    video_saved = False
 
-    
+    if record_video:
+        import wandb
+        wandb.init(project="walk-these-ways", name=args.exptid, entity="iai-eipo", group=args.exptid[:3], mode='offline', dir=LEGGED_GYM_ROOT_DIR+'/experiment/eval_videos')
+
     # TODO: UPDATE
     # env_cfg.depth.rgb_horizontal_fov = env_cfg.depth.horizontal_fov
     # env_cfg.domain_rand.randomize_lighting = True
@@ -170,7 +177,9 @@ def play(args):
                 obs_student[:, 6:8] = 0
                 with torch.no_grad():
                     vision_latent_and_yaw = vision_encoder(infos[image_type], obs_student)
+                    #vision_latent_and_yaw = normalize(vision_latent_and_yaw, dim=1)
                 vision_latent = vision_latent_and_yaw[:, :-2]
+               # print(vision_latent)
                 yaw = 1.5*vision_latent_and_yaw[:, -2:]
             #obs[:, 6:8] = yaw
                 
@@ -214,6 +223,28 @@ def play(args):
         cur_edge_violation[new_ids] = 0
         cur_time_from_start[killed_ids] = 0
 
+        if record_video:
+            if i ==0:
+                env.start_recording()
+            else:
+                frames = env.get_complete_frames()
+
+                if len(frames) > 0:
+                    env.pause_recording()
+                    print("LOGGING VIDEO")
+                    video_array = np.concatenate([np.expand_dims(frame, axis=0) for frame in frames ], axis=0).swapaxes(1, 3).swapaxes(2, 3)
+                    print(video_array.shape)
+                    # logger.save_video(frames, f"videos/{it:05d}.mp4", fps=1 / self.env.dt)
+                    wandb.log({"video": wandb.Video(video_array, fps=50)}, step=i)
+                    video_saved=True
+                    break
+
+    if record_video and not video_saved:
+        frames = env.video_frames
+        video_array = np.concatenate([np.expand_dims(frame, axis=0) for frame in frames ], axis=0).swapaxes(1, 3).swapaxes(2, 3)
+        print(video_array.shape)
+        # logger.save_video(frames, f"videos/{it:05d}.mp4", fps=1 / self.env.dt)
+        wandb.log({"video": wandb.Video(video_array, fps=50)}, step=i)
 
     
     #compute buffer mean and std
