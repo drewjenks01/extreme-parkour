@@ -292,7 +292,7 @@ class RGBMobileNetBackbone(nn.Module):
         self.model = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v2', pretrained=True).eval()
         self.model.classifier = nn.Identity()
 
-        finetune = True
+        finetune = False
 
          #Freeze layers up to a certain point (default: 10)
         if finetune:
